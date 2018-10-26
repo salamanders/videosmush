@@ -20,13 +20,18 @@ class KInputVideo(fileName: String) : AutoCloseable {
     }
 
     val frames = sequence<Frame> {
+        var frameNumber = 1
         while (true) {
+            frameNumber++
             val frame = grabber.grabImage() ?: break
             if (filter != null) {
                 filter!!.push(frame)
                 yield(filter!!.pull())
             } else {
                 yield(frame)
+            }
+            if ((frameNumber and (frameNumber - 1)) == 0) {
+                println("Read frame $frameNumber of ${grabber.lengthInVideoFrames}")
             }
         }
         grabber.stop()

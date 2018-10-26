@@ -19,10 +19,15 @@ infix fun ClosedRange<Double>.step(step: Double): Iterable<Double> {
 
 /** If you pass in a file name, the label is a hash of the file.  Or pass in a generic string label */
 fun labelToFile(fileOrLabel: String): File {
-    val hash = if (File(fileOrLabel).canRead()) {
-        "_" + MessageDigest.getInstance("MD5").digest(
-                File(fileOrLabel).readBytes()
-        ).joinToString("") { byte ->
+    val f = File(fileOrLabel)
+
+    // Max of 10MB
+    val hash = if (f.canRead()) {
+        val byteArray = ByteArray(Math.min(f.length(), 1024 * 1024 * 10L).toInt())
+        File(fileOrLabel).inputStream().use {
+            it.read(byteArray)
+        }
+        "_" + MessageDigest.getInstance("MD5").digest(byteArray).joinToString("") { byte ->
             String.format("%02X", byte)
         }.substring(0, 10)
     } else {
