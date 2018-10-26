@@ -24,7 +24,7 @@ infix fun IntArray.averageDiff(other: IntArray): Double {
  * First cropped to center, then scaled to very small thumb. (ok if not square)
  */
 fun getDiffs(inputFileName: String): List<Double> {
-    KVideo(inputFileName).use { source ->
+    KInputVideo(inputFileName).use { source ->
         source.setFilter("crop=in_w*.5:in_h*.5:in_w*.25:in_h*.25,scale=$THUMB_RES:$THUMB_RES")
         return source.frames.map {
             converter.convert(it)!!

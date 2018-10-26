@@ -1,9 +1,8 @@
-import org.bytedeco.javacv.FFmpegFrameFilter
-import org.bytedeco.javacv.FFmpegFrameGrabber
-import org.bytedeco.javacv.Frame
+import org.bytedeco.javacv.*
+import java.awt.image.BufferedImage
 
-/** Small wrapper around FFmpegFrameGrabber that allows for a filter and provides a sequence of frames */
-class KVideo(fileName: String) : AutoCloseable {
+/** Small wrapper around FFmpegFrameGrabber that allows for a filter and provides a sequence of frames or BI */
+class KInputVideo(fileName: String) : AutoCloseable {
     val width: Int
     val height: Int
     private val pixelFormat: Int
@@ -33,6 +32,8 @@ class KVideo(fileName: String) : AutoCloseable {
         grabber.stop()
     }.constrainOnce()
 
+    val framesBi = frames.map { CONVERTER.convert(it)!! }
+
     private var filter: FFmpegFrameFilter? = null
     fun setFilter(filterStr: String) {
         val newFilter = FFmpegFrameFilter(filterStr, width, height)
@@ -44,5 +45,9 @@ class KVideo(fileName: String) : AutoCloseable {
     override fun close() {
         grabber.stop()
         filter?.close()
+    }
+
+    companion object {
+        private val CONVERTER: FrameConverter<BufferedImage> = Java2DFrameConverter()
     }
 }

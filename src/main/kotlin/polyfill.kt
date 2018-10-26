@@ -18,19 +18,21 @@ infix fun ClosedRange<Double>.step(step: Double): Iterable<Double> {
 }
 
 /** If you pass in a file name, the label is a hash of the file.  Or pass in a generic string label */
-fun labelToFile(fileOrLabel:String):File {
+fun labelToFile(fileOrLabel: String): File {
     val hash = if (File(fileOrLabel).canRead()) {
         "_" + MessageDigest.getInstance("MD5").digest(
                 File(fileOrLabel).readBytes()
         ).joinToString("") { byte ->
             String.format("%02X", byte)
         }.substring(0, 10)
-    } else { "" }
+    } else {
+        ""
+    }
     return File("$fileOrLabel$hash.ser")
 }
 
 /** Drop an object off in the cache */
-fun <T> saveObj(obj: T, sourceFileNameOrLabel: String ): T {
+fun <T> saveObj(obj: T, sourceFileNameOrLabel: String): T {
     ObjectOutputStream(labelToFile(sourceFileNameOrLabel).outputStream()).use {
         it.writeObject(obj)
     }
