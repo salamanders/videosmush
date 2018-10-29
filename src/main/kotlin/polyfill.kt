@@ -36,6 +36,27 @@ fun labelToFile(fileOrLabel: String): File {
     return File("$fileOrLabel$hash.ser")
 }
 
+fun <T> sequenceToChunks(sourceSequence: Sequence<T>, chunkSizes: List<Int>): Sequence<List<T>> = sequence<List<T>> {
+    val consumableMergeList = mutableListOf<Int>().apply { addAll(chunkSizes) }
+    val buffer = mutableListOf<T>()
+
+    for (element in sourceSequence) {
+        buffer += element
+        if (consumableMergeList.isNotEmpty()) {
+            consumableMergeList[0]--
+            if (consumableMergeList[0] == 0) {
+                yield(buffer)
+                buffer.clear()
+                consumableMergeList.removeAt(0)
+            }
+        } else {
+            println("Past end of merged instructions, lumping remaining elements into last list.")
+        }
+    }
+    if (buffer.isNotEmpty()) yield(buffer)
+}
+
+
 /** Drop an object off in the cache */
 fun <T> saveObj(obj: T, sourceFileNameOrLabel: String): T {
     ObjectOutputStream(labelToFile(sourceFileNameOrLabel).outputStream()).use {

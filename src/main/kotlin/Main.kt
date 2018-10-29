@@ -1,53 +1,36 @@
-import java.awt.image.BufferedImage
-
 private val conf = Conf()
 
 fun main() {
     // Average diff of ~1
-    val scaledFrameDiffs = getScaledFrameDiffs()
+    println("Step 1: Get diffs between thumbnail frames")
+    @Suppress("UNCHECKED_CAST")
+    val uncalibratedDiffBetweenFrames = loadObj(conf.inputFileName) as? List<Double>
+            ?: saveObj(getDiffs(conf.inputFileName, false), conf.inputFileName)
+
+    val scaledFrameDiffs = getScaledFrameDiffs(uncalibratedDiffBetweenFrames)
     println("diffBetweenFramesAvg (should be 1):${scaledFrameDiffs.average()}, min:${scaledFrameDiffs.min()}, max:${scaledFrameDiffs.max()}")
 
-    // Do voodoo to produce the frame merge instructions
+    // Do voodoo to produce the frame merge instructions: Each list elt is "how many frames to collapse into one"
     val nicelyShapedMerges = getNicelyShapedMerges(scaledFrameDiffs)
+
+    println("Step 2: Render merged frames.")
     render(nicelyShapedMerges)
 }
 
 fun render(reshapedMerges: List<Int>) {
 
     val source = KInputVideo(conf.inputFileName)
-    println("Attempting to boil down ${conf.inputFileName} to ${conf.outputFileName} (${reshapedMerges.size}).")
+    println("Attempting to boil down ${conf.inputFileName} to ${conf.outputFileName} (${reshapedMerges.size / 30}sec).")
     val output = KOutputVideo(conf.outputFileName)
 
-    // easier way to chunk w/ variable sizes?
-    sequence<List<BufferedImage>> {
-        val consumableMergeList = mutableListOf<Int>()
-        consumableMergeList.addAll(reshapedMerges)
-        val buffer = mutableListOf<BufferedImage>()
-        for (element in source.framesBi) {
-            buffer += element
-            if (consumableMergeList.isNotEmpty()) {
-                consumableMergeList[0]--
-                if (consumableMergeList[0] == 0) {
-                    yield(buffer)
-                    buffer.clear()
-                    consumableMergeList.removeAt(0)
-                }
-            } else {
-                println("Past end of merged instructions, lumping remaining frames together.")
-            }
+    sequenceToChunks(source.frames, reshapedMerges).forEachIndexed { outputFrame, framesToMerge ->
+        require(framesToMerge.isNotEmpty())
+        if ((outputFrame and (outputFrame - 1)) == 0) {
+            println("Output frame $outputFrame is merging ${framesToMerge.size}")
         }
-        if (buffer.isNotEmpty()) yield(buffer)
-    }.forEach { frames ->
-        if (frames.isNotEmpty()) {
-            val imageStacker = ImageStacker()
-            frames.forEach {
-                imageStacker.add(it)
-            }
-            output.add(imageStacker.getStack())
-        } else {
-            println("Skipping empty frame group (that is odd)")
-        }
+        output.add(ImageStacker().addAll(framesToMerge).combined)
     }
+
     output.close()
 }
 
@@ -55,11 +38,7 @@ fun render(reshapedMerges: List<Int>) {
  * Frame diffs, but scaled up from [0..1] until the average is 1.0
  * Also handles caching the time-consuming getDiffs function
  */
-fun getScaledFrameDiffs(): List<Double> {
-    // Takes a long time, so cache the results for dev. all in 0..1
-    @Suppress("UNCHECKED_CAST")
-    val uncalibratedDiffBetweenFrames = loadObj(conf.inputFileName) as? List<Double>
-            ?: saveObj(getDiffs(conf.inputFileName), conf.inputFileName)
+fun getScaledFrameDiffs(uncalibratedDiffBetweenFrames: List<Double>): List<Double> {
     println("Starting with ${uncalibratedDiffBetweenFrames.size} diffs between frames")
     // If we wanted to smooth or average the diffs, would do it here.
     // uncalibratedDiffBetweenFrames.windowed( size = smoothWindowSize, partialWindows = true ) { it.average() }
@@ -90,7 +69,8 @@ fun getNicelyShapedMerges(scaledFrameDiffs: List<Double>): List<Int> {
             return merges
         }
     }
-    error("No good shape for merges")
+    println("No good shape for merges, going with direct threshold:$avgSourceToFinalFrameMerge")
+    return frameDiffsToMergeCounts(scaledFrameDiffs, avgSourceToFinalFrameMerge.toDouble())
 }
 
 /**
