@@ -1,27 +1,17 @@
+import java.awt.image.BufferedImage
 import java.io.File
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
-
-// Unsure why this isn't standard https://stackoverflow.com/questions/44315977/ranges-in-kotlin-using-data-type-double
-infix fun ClosedRange<Double>.step(step: Double): Iterable<Double> {
-    require(start.isFinite())
-    require(endInclusive.isFinite())
-    require(step > 0.0) { "Step must be positive, was: $step." }
-    val sequence = generateSequence(start) { previous ->
-        if (previous == Double.POSITIVE_INFINITY) return@generateSequence null
-        val next = previous + step
-        if (next > endInclusive) null else next
-    }
-    return sequence.asIterable()
-}
 
 /** If you pass in a file name, the label is a hash of the file.  Or pass in a generic string label */
 fun labelToFile(fileOrLabel: String): File {
     val f = File(fileOrLabel)
 
-    // Max of 10MB
+    // Max of 10MB for hashing, which should be plenty but still fast.
     val hash = if (f.canRead()) {
         val byteArray = ByteArray(Math.min(f.length(), 1024 * 1024 * 10L).toInt())
         File(fileOrLabel).inputStream().use {
@@ -33,45 +23,30 @@ fun labelToFile(fileOrLabel: String): File {
     } else {
         ""
     }
-    return File("$fileOrLabel$hash.ser")
+    return File("$fileOrLabel$hash.ser.gz")
 }
 
-fun <T> sequenceToChunks(sourceSequence: Sequence<T>, chunkSizes: List<Int>): Sequence<List<T>> = sequence<List<T>> {
-    val consumableMergeList = mutableListOf<Int>().apply { addAll(chunkSizes) }
-    val buffer = mutableListOf<T>()
-
-    for (element in sourceSequence) {
-        buffer += element
-        if (consumableMergeList.isNotEmpty()) {
-            consumableMergeList[0]--
-            if (consumableMergeList[0] == 0) {
-                yield(buffer)
-                buffer.clear()
-                consumableMergeList.removeAt(0)
-            }
-        } else {
-            println("Past end of merged instructions, lumping remaining elements into last list.")
-        }
-    }
-    if (buffer.isNotEmpty()) yield(buffer)
-}
-
-
-/** Drop an object off in the cache */
-fun <T> saveObj(obj: T, sourceFileNameOrLabel: String): T {
-    ObjectOutputStream(labelToFile(sourceFileNameOrLabel).outputStream()).use {
-        it.writeObject(obj)
-    }
-    return obj
-}
-
-/** Load a cached object if available */
-fun loadObj(sourceFileNameOrLabel: String): Any? {
+/** Load a cached object if available, calculate and cache if not. */
+fun <T> cachedOrCalculated(sourceFileNameOrLabel: String, exec: () -> T): T {
     val file = labelToFile(sourceFileNameOrLabel)
     if (file.canRead()) {
-        ObjectInputStream(file.inputStream()).use {
-            return it.readObject()
+        ObjectInputStream(GZIPInputStream(file.inputStream())).use {
+            @Suppress("UNCHECKED_CAST")
+            return it.readObject() as T
         }
     }
-    return null
+    val result = exec()
+    ObjectOutputStream(GZIPOutputStream(labelToFile(sourceFileNameOrLabel).outputStream())).use {
+        it.writeObject(result)
+    }
+    return result
 }
+
+fun BufferedImage.deepCopy(): BufferedImage {
+    val cm = colorModel!!
+    val isAlphaPremultiplied = cm.isAlphaPremultiplied
+    val raster = copyData(null)!!
+    return BufferedImage(cm, raster, isAlphaPremultiplied, null)
+}
+
+fun Double.toPercent(): String = "${Math.round(100 * this)}%"

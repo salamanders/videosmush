@@ -1,90 +1,90 @@
+import info.benjaminhill.video.ImageAverage
+import info.benjaminhill.video.VideoPixelDiff
+import info.benjaminhill.video.VideoReader
+import info.benjaminhill.video.VideoWriter
+import info.benjaminhill.workergraph.WorkerToList
+import mu.KotlinLogging
+import org.nield.kotlinstatistics.standardDeviation
+
+private val logger = KotlinLogging.logger {}
 private val conf = Conf()
 
+
 fun main() {
-    // Average diff of ~1
-    println("Step 1: Get diffs between thumbnail frames")
-    @Suppress("UNCHECKED_CAST")
-    val uncalibratedDiffBetweenFrames = loadObj(conf.inputFileName) as? List<Double>
-            ?: saveObj(getDiffs(conf.inputFileName, false), conf.inputFileName)
+    logger.info { "Step 1: Get (possibly from cache) the diffs between thumbnail frames" }
+    val diffs = cachedOrCalculated(conf.inputFileName) {
 
-    val scaledFrameDiffs = getScaledFrameDiffs(uncalibratedDiffBetweenFrames)
-    println("diffBetweenFramesAvg (should be 1):${scaledFrameDiffs.average()}, min:${scaledFrameDiffs.min()}, max:${scaledFrameDiffs.max()}")
-
-    // Do voodoo to produce the frame merge instructions: Each list elt is "how many frames to collapse into one"
-    val nicelyShapedMerges = getNicelyShapedMerges(scaledFrameDiffs)
-
-    println("Step 2: Render merged frames.")
-    render(nicelyShapedMerges)
-}
-
-fun render(reshapedMerges: List<Int>) {
-
-    val source = KInputVideo(conf.inputFileName)
-    println("Attempting to boil down ${conf.inputFileName} to ${conf.outputFileName} (${reshapedMerges.size / 30}sec).")
-    val output = KOutputVideo(conf.outputFileName)
-
-    sequenceToChunks(source.frames, reshapedMerges).forEachIndexed { outputFrame, framesToMerge ->
-        require(framesToMerge.isNotEmpty())
-        if ((outputFrame and (outputFrame - 1)) == 0) {
-            println("Output frame $outputFrame is merging ${framesToMerge.size}")
-        }
-        output.add(ImageStacker().addAll(framesToMerge).combined)
+        val file2thumbs = VideoReader(conf.inputFileName, VideoPixelDiff.FILTER)
+        val thumbs2diffs = VideoPixelDiff(file2thumbs)
+        val diffs2list = WorkerToList(thumbs2diffs)
+        diffs2list.takeOne()
     }
 
-    output.close()
+    logger.info { "Step 2: Figure out the most aesthetic way to combine the images" }
+    val betterFrameDiffs = manipulateFrameDiffs(diffs)
+    val sourceFrameCounts = frameDiffsToSourceFrameCounts(betterFrameDiffs)
+    logger.info {
+        "Output length: ${sourceFrameCounts.size / conf.outputFramesPerSecond} sec, " +
+                "max merge:${sourceFrameCounts.max()}, " +
+                "min merge: ${sourceFrameCounts.min()}"
+    }
+
+    logger.info { sourceFrameCounts.joinToString(",") }
+
+    logger.info { "Step 3: Render merged frames." }
+    val file2images = VideoReader(conf.inputFileName)
+    val averagedVideo = ImageAverage(file2images, sourceFrameCounts)
+    val outputWriter = VideoWriter(averagedVideo, conf.outputFileName, conf.outputFramesPerSecond.toDouble())
+    logger.info { outputWriter.takeOne() }
 }
 
-/**
- * Frame diffs, but scaled up from [0..1] until the average is 1.0
- * Also handles caching the time-consuming getDiffs function
- */
-fun getScaledFrameDiffs(uncalibratedDiffBetweenFrames: List<Double>): List<Double> {
-    println("Starting with ${uncalibratedDiffBetweenFrames.size} diffs between frames")
-    // If we wanted to smooth or average the diffs, would do it here.
-    // uncalibratedDiffBetweenFrames.windowed( size = smoothWindowSize, partialWindows = true ) { it.average() }
 
-    // Scale to average 1, so we can reshape with an exponent later
-    val uncalibratedDiffAvg = uncalibratedDiffBetweenFrames.average()
-    return uncalibratedDiffBetweenFrames.map { it * 1 / uncalibratedDiffAvg }
-}
+/** This is where we play with numbers to make everything look good! */
+fun manipulateFrameDiffs(rawFrameDiffs: List<Double>): List<Double> {
+    // Smooth first, because more fun when speedup is sustained.
+    // Might be better to replace with min or max, or gaussian smoothing
+    val smoothed = rawFrameDiffs
+            .windowed(size = 2 * conf.outputFramesPerSecond * rawFrameDiffs.size / conf.goalOutputFrames,
+                    partialWindows = true
+            ) {
+                // Smooth over approx 1 second of TARGET video
+                it.average()
+            }
 
-/**
- * Merges that bring the total length down to sub conf.outputFrames length,
- * yet keep conf.numberSingleFrameSource frames unmerged
- */
-fun getNicelyShapedMerges(scaledFrameDiffs: List<Double>): List<Int> {
-    // Because it has been scaled up to an average diff value of 1,
-    // we can raise it to a power to bring down the length while preserving the no-merge frames.
-
-    val avgSourceToFinalFrameMerge = scaledFrameDiffs.size / conf.goalOutputFrames
-    println("Attempting to reduce $avgSourceToFinalFrameMerge:1")
-    // If you don't get it working by raising to the power of 10, give up!
-    for (exp in 1.0..10.0 step 0.01) {
-        val sqFrameDiffs = scaledFrameDiffs.map { Math.pow(it, exp) }
-        val sufficientSinglesThreshold = sqFrameDiffs.sortedDescending()[conf.numberFrameWithSingleSource * avgSourceToFinalFrameMerge]
-        val merges = frameDiffsToMergeCounts(sqFrameDiffs, sufficientSinglesThreshold)
-        if (merges.size < conf.goalOutputFrames) {
-            println("(sufficientSinglesThreshold:$sufficientSinglesThreshold, exp:$exp) = Output Seconds : ${merges.size / 30}, Single Source Frames: ${merges.count { it == 1 }}")
-            println(merges.joinToString(","))
-            return merges
+    // cap >2 standard deviations
+    val avg = smoothed.average()
+    val std = smoothed.standardDeviation()
+    val capped = smoothed.map {
+        when {
+            it < avg - (2 * std) -> avg - (2 * std)
+            it > avg + (2 * std) -> avg + (2 * std)
+            else -> it
         }
     }
-    println("No good shape for merges, going with direct threshold:$avgSourceToFinalFrameMerge")
-    return frameDiffsToMergeCounts(scaledFrameDiffs, avgSourceToFinalFrameMerge.toDouble())
+
+    // Normalize from 0..1 (last step!)
+    val minDiff = capped.min()!!
+    val maxDiff = capped.max()!!
+    val normalized = capped.map {
+        (it - minDiff) / (maxDiff - minDiff)
+    }
+
+    return normalized
 }
 
 /**
  * The underlying time-lapse: Sequentially merge frames until you exceed a diff threshold.
- * If the diff threshold was fixed, would be a standard blurred together time-lapse.
+ * If instead it was "merge until X frames", would be a standard blurred together time-lapse.
  */
-fun frameDiffsToMergeCounts(frameDiffs: List<Double>, threshold: Double): List<Int> {
+fun frameDiffsToSourceFrameCounts(frameDiffs: List<Double>): List<Int> {
+    val avgDiffPerOutputFrame = frameDiffs.sum() / conf.goalOutputFrames
     val numberFramesMergedIntoOne = mutableListOf<Int>()
     var pendingFrameCount = 0
     var runningDiff = 0.0
     frameDiffs.forEach { diff ->
         runningDiff += diff
         pendingFrameCount++
-        if (runningDiff >= threshold) {
+        if (runningDiff >= avgDiffPerOutputFrame) {
             numberFramesMergedIntoOne.add(pendingFrameCount)
             pendingFrameCount = 0
             runningDiff = 0.0

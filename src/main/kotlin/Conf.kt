@@ -7,8 +7,8 @@ class Conf {
     }
 
     private val inputFile by stringType
-    private val outputFrames by intType
-    private val sfDest by intType
+    private val outputSeconds by intType
+    private val outputFPS by intType
     private val outputFile by stringType
 
     private val config = ConfigurationProperties.systemProperties() overriding
@@ -16,8 +16,8 @@ class Conf {
             ConfigurationMap(
                     "inputFile" to "input.mp4",
                     "outputFile" to "output.mp4",
-                    "outputFrames" to "1800",
-                    "sfDest" to "30"
+                    "outputSeconds" to "30",
+                    "outputFPS" to "30"
             )
 
     val inputFileName: String
@@ -27,8 +27,8 @@ class Conf {
         get() = config[outputFile]
 
     val goalOutputFrames: Int
-        get() = config[outputFrames]
+        get() = config[outputSeconds] * config[outputFPS]
 
-    val numberFrameWithSingleSource: Int
-        get() = config[sfDest]
+    val outputFramesPerSecond: Int
+        get() = config[outputFPS]
 }
