@@ -3,6 +3,7 @@ package info.benjaminhill.video2
 import info.benjaminhill.utils.averageDiff
 import info.benjaminhill.utils.cachedOrCalculated
 import info.benjaminhill.utils.zipWithNext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flowOn
@@ -11,11 +12,13 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.nield.kotlinstatistics.standardDeviation
 import java.io.File
+import kotlin.time.ExperimentalTime
 
 private const val OUTPUT_SECONDS = 30.0
 private const val OUTPUT_FRAMES = OUTPUT_SECONDS * OUTPUT_FPS
 
 
+@ExperimentalTime
 fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     val fileInput = File("input.mp4")
     val fileThumbs = File("thumbs.mp4")
@@ -29,24 +32,27 @@ fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
 
     val diffs = cachedOrCalculated("diffs") {
         println("Finding pixel differences between thumbnails.")
-        val (fps, images) = videoToBufferedImages(fileThumbs)
-        images.map { it.toIntArray() }
-                .zipWithNext { a, b -> a averageDiff b }
-                .toList()
+        val (fps, images) = videoToDecodedImages(fileThumbs)
+        images
+            .map { it.toHue() }
+            .zipWithNext { a, b -> a averageDiff b }
+            .toList()
     }
     val betterFrameDiffs = manipulateFrameDiffs(diffs)
     val sourceFrameCounts = frameDiffsToSourceFrameCounts(betterFrameDiffs)
 
-    println("Output length: ${sourceFrameCounts.size / OUTPUT_FPS} sec, " +
-            "max merge:${sourceFrameCounts.max()}, " +
-            "min merge: ${sourceFrameCounts.min()}")
+    println(
+        "Output length: ${sourceFrameCounts.size / OUTPUT_FPS} sec, " +
+                "max merge:${sourceFrameCounts.max()}, " +
+                "min merge: ${sourceFrameCounts.min()}"
+    )
 
     println("Writing frames to file.")
-    val (fps, images) = videoToBufferedImages(fileInput)
+    val (fps, images) = videoToDecodedImages(fileInput)
     images.buffer()
-            .mergeFrames(sourceFrameCounts).buffer()
-            .flowOn(Dispatchers.IO)
-            .collectToFile(fileOutput, OUTPUT_FPS)
+        .mergeFrames(sourceFrameCounts).buffer()
+        .flowOn(Dispatchers.IO)
+        .collectToFile(fileOutput, OUTPUT_FPS)
 }
 
 
@@ -55,12 +61,13 @@ private fun manipulateFrameDiffs(rawFrameDiffs: List<Double>): List<Double> {
     // Smooth first, because more fun when speedup is sustained.
     // Might be better to replace with min or max, or gaussian smoothing
     val smoothed = rawFrameDiffs
-            .windowed(size = (2 * OUTPUT_FPS * rawFrameDiffs.size / OUTPUT_FRAMES).toInt(),
-                    partialWindows = true
-            ) {
-                // Smooth over approx 1 second of TARGET video
-                it.average()
-            }
+        .windowed(
+            size = (2 * OUTPUT_FPS * rawFrameDiffs.size / OUTPUT_FRAMES).toInt(),
+            partialWindows = true
+        ) {
+            // Smooth over approx 1 second of TARGET video
+            it.average()
+        }
 
     // cap >2 standard deviations
     val avg = smoothed.average()

@@ -1,3 +1,5 @@
+@file:Suppress("BlockingMethodInNonBlockingContext")
+
 package info.benjaminhill.video2
 
 import info.benjaminhill.utils.println2
@@ -8,10 +10,7 @@ import kotlinx.coroutines.flow.collectIndexed
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import org.bytedeco.javacpp.avutil
-import org.bytedeco.javacv.FFmpegFrameFilter
-import org.bytedeco.javacv.FFmpegFrameGrabber
-import org.bytedeco.javacv.FFmpegFrameRecorder
-import org.bytedeco.javacv.Java2DFrameConverter
+import org.bytedeco.javacv.*
 import java.awt.image.BufferedImage
 import java.io.File
 
@@ -20,15 +19,18 @@ const val FILTER_THUMB32 = "crop=in_w*.5:in_h*.5:in_w*.25:in_h*.25,scale=32:32"
 /**
  * @param file ffmpeg-readable video file
  * @param filterStr optional ffmpeg filter string
- * @return Frame Rate/sec, flow of images
+ * @return Frame Rate/sec, flow of Frames (minimal processing, just clone)
  */
-fun videoToBufferedImages(
-        file: File,
-        filterStr: String? = null
-): Pair<Double, Flow<BufferedImage>> {
+fun videoToDecodedImages(
+    file: File,
+    filterStr: String? = null
+): Pair<Double, Flow<DecodedImage>> {
     require(file.canRead()) { "Unable to read ${file.name}" }
     avutil.av_log_set_level(avutil.AV_LOG_QUIET)
-    val converter = Java2DFrameConverter()
+
+    val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
+        override fun initialValue() = Java2DFrameConverter()
+    }
 
     var frameNumber = 0
 
@@ -51,9 +53,9 @@ fun videoToBufferedImages(
                 it.push(nextFrame)
                 it.pull()
             } ?: nextFrame
-            emit(converter.convert(filteredFrame.clone()).deepCopy())
+            // Immediately move into a DecodedImage so we don't need to Java2DFrameConverter.cloneBufferedImage
+            emit(DecodedImage(converter.get().convert(filteredFrame)))
 
-            // powers of 2
             println2(frameNumber) {
                 "Read frame $frameNumber (${(frameNumber.toDouble() / grabber.lengthInVideoFrames).toPercent()})"
             }
@@ -66,7 +68,6 @@ fun videoToBufferedImages(
         grabber.stop()
         grabber.close()
     }.flowOn(Dispatchers.Default)
-
 
     return Pair(grabber.videoFrameRate, result)
 }
@@ -93,5 +94,4 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
     ffr?.close()
     println("Finished writing to ${destinationFile.name} ($maxFrameNumber frames)")
 }
-
 

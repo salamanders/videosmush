@@ -12,6 +12,7 @@ import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.time.*
 
 
 /** Load a cached object if available, calculate and cache if not. */
@@ -55,3 +56,21 @@ fun println2(lineNum: Int, log: () -> String) {
     }
 }
 
+/**
+ * "[[hh:]mm:]ss]" to Duration
+ */
+@ExperimentalTime
+fun String.hmsToDuration(): Duration {
+    val parts = split(":").reversed()
+    var result = 0.seconds
+    if (parts.isNotEmpty()) {
+        result += parts[0].toLong().seconds
+    }
+    if (parts.size > 1) {
+        result += parts[1].toLong().minutes
+    }
+    if (parts.size > 2) {
+        result += parts[2].toLong().hours
+    }
+    return result
+}
