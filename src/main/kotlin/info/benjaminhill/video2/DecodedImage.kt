@@ -24,7 +24,7 @@ class DecodedImage(val width: Int, val height: Int) {
             BufferedImage.TYPE_3BYTE_BGR,
             BufferedImage.TYPE_4BYTE_ABGR,
             -> {
-                val data = (source.raster.dataBuffer!! as DataBufferByte).data
+                val data = (source.raster.dataBuffer!! as DataBufferByte).data!!
                 val stepSize = if (source.alphaRaster == null) 3 else 4
                 for (i in red.indices) {
                     // ignore alpha channel 3 if it exists
@@ -37,7 +37,7 @@ class DecodedImage(val width: Int, val height: Int) {
             BufferedImage.TYPE_INT_BGR,
             BufferedImage.TYPE_INT_ARGB,
             -> {
-                val data = (source.raster.dataBuffer!! as DataBufferInt).data
+                val data = (source.raster.dataBuffer!! as DataBufferInt).data!!
                 for (i in red.indices) {
                     // ignore alpha shift 24 if it exists
                     red[i] = (data[i] shr 16 and 0xFF)

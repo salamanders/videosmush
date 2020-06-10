@@ -1,6 +1,6 @@
 package info.benjaminhill.video2
 
-import info.benjaminhill.utils.hmsToDuration
+import info.benjaminhill.utils.hms
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.buffer
@@ -16,19 +16,18 @@ const val OUTPUT_FPS = 60.0
 @ExperimentalCoroutinesApi
 @ExperimentalTime
 fun main(): Unit = runBlocking(Dispatchers.Default) {
-    val fileInput = File("~/Downloads/VID_20200510_191740_2.mp4")
-    val fileOutput = File("timelapse_tmp.mp4")
+    val fileInput = File("/Users/benhill/Downloads/molt3/molt3_normal.mp4").also { require(it.canRead()) }
+    val fileOutput = File("timelapse_molt3.mp4")
 
     val (sourceFps, images) = videoToDecodedImages(fileInput)
 
     val script = customMergeToScript(
         mapOf(
-            "0".hmsToDuration()  to 2.seconds,// sit
-            "0:44:4".hmsToDuration() to 15.seconds, // crack open, pop
-            "0:46:12".hmsToDuration() to 9.seconds, // wiggle
-            "0:48:0".hmsToDuration() to 15.seconds, // dry
-            "0:57:43".hmsToDuration() to 5.seconds, // chill
-            "3:23:0".hmsToDuration() to 3.seconds, // done
+            "0".hms  to 8.seconds, // straighten
+            "32:36".hms to 30.seconds, // pop
+            "37:40".hms to 5.seconds, // grab
+            "42:27".hms to 10.seconds, // dance
+            "2:29:46".hms to 10.seconds // dry
         ), sourceFps
     )
 
