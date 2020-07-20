@@ -3,7 +3,6 @@ package info.benjaminhill.video2
 import info.benjaminhill.utils.averageDiff
 import info.benjaminhill.utils.cachedOrCalculated
 import info.benjaminhill.utils.zipWithNext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flowOn
@@ -43,8 +42,8 @@ fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
 
     println(
         "Output length: ${sourceFrameCounts.size / OUTPUT_FPS} sec, " +
-                "max merge:${sourceFrameCounts.max()}, " +
-                "min merge: ${sourceFrameCounts.min()}"
+                "max merge:${sourceFrameCounts.maxOrNull()}, " +
+                "min merge: ${sourceFrameCounts.minOrNull()}"
     )
 
     println("Writing frames to file.")
@@ -75,8 +74,8 @@ private fun manipulateFrameDiffs(rawFrameDiffs: List<Double>): List<Double> {
     val capped = smoothed.map { it.coerceIn(avg - (2 * std), avg + (2 * std)) }
 
     // Normalize from 0..1 (last step!)
-    val minDiff = capped.min()!!
-    val maxDiff = capped.max()!!
+    val minDiff = capped.minOrNull()!!
+    val maxDiff = capped.maxOrNull()!!
 
     // Normalized
     return capped.map {

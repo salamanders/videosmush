@@ -12,43 +12,17 @@ import java.awt.image.DataBufferInt
  * Image fully parsed out to a full int per each pixel per each channel.
  * NOT memory efficient, but avoids overflows.
  */
-class DecodedImage(val width: Int, val height: Int) {
-    private val red = IntArray(width * height)
-    private val green = IntArray(width * height)
-    private val blue = IntArray(width * height)
-    private var numAdded = 0
+class DecodedImage
+    private constructor(
+            private val width: Int,
+            private val height: Int,
+            private val red: IntArray = IntArray(width * height),
+            private val green: IntArray = IntArray(width * height),
+            private val blue: IntArray = IntArray(width * height),
+) {
+    // Assume you always have at least one
+    private var numAdded = 1
     private val lock = Mutex()
-
-    constructor(source: BufferedImage) : this(source.width, source.height) {
-        when (source.type) {
-            BufferedImage.TYPE_3BYTE_BGR,
-            BufferedImage.TYPE_4BYTE_ABGR,
-            -> {
-                val data = (source.raster.dataBuffer!! as DataBufferByte).data!!
-                val stepSize = if (source.alphaRaster == null) 3 else 4
-                for (i in red.indices) {
-                    // ignore alpha channel 3 if it exists
-                    red[i] = data[i * stepSize + 2].toInt() and 0xFF
-                    green[i] = data[i * stepSize + 1].toInt() and 0xFF
-                    blue[i] = data[i * stepSize + 0].toInt() and 0xFF
-                }
-            }
-            BufferedImage.TYPE_INT_RGB,
-            BufferedImage.TYPE_INT_BGR,
-            BufferedImage.TYPE_INT_ARGB,
-            -> {
-                val data = (source.raster.dataBuffer!! as DataBufferInt).data!!
-                for (i in red.indices) {
-                    // ignore alpha shift 24 if it exists
-                    red[i] = (data[i] shr 16 and 0xFF)
-                    green[i] = (data[i] shr 8 and 0xFF)
-                    blue[i] = (data[i] shr 0 and 0xFF)
-                }
-            }
-            else -> throw IllegalArgumentException("Bad image type: ${source.type}")
-        }
-        numAdded++
-    }
 
     /** Adds pixel RGB values to the internal image */
     suspend operator fun plusAssign(other: DecodedImage) {
@@ -100,6 +74,44 @@ class DecodedImage(val width: Int, val height: Int) {
     }
 
     companion object {
+        fun BufferedImage.toDecodedImage(): DecodedImage {
+            val width = width
+            val height = height
+            val red = IntArray(width * height)
+            val green = IntArray(width * height)
+            val blue = IntArray(width * height)
+
+            when (type) {
+                BufferedImage.TYPE_3BYTE_BGR,
+                BufferedImage.TYPE_4BYTE_ABGR,
+                -> {
+                    val data = (raster.dataBuffer!! as DataBufferByte).data!!
+                    val stepSize = if (alphaRaster == null) 3 else 4
+                    for (i in red.indices) {
+                        // ignore alpha channel 3 if it exists
+                        red[i] = data[i * stepSize + 2].toInt() and 0xFF
+                        green[i] = data[i * stepSize + 1].toInt() and 0xFF
+                        blue[i] = data[i * stepSize + 0].toInt() and 0xFF
+                    }
+                }
+                BufferedImage.TYPE_INT_RGB,
+                BufferedImage.TYPE_INT_BGR,
+                BufferedImage.TYPE_INT_ARGB,
+                -> {
+                    val data = (raster.dataBuffer!! as DataBufferInt).data!!
+                    for (i in red.indices) {
+                        // ignore alpha shift 24 if it exists
+                        red[i] = (data[i] shr 16 and 0xFF)
+                        green[i] = (data[i] shr 8 and 0xFF)
+                        blue[i] = (data[i] shr 0 and 0xFF)
+                    }
+                }
+                else -> throw IllegalArgumentException("Bad image type: $type")
+            }
+            return DecodedImage(width, height, red, green, blue)
+        }
+
+
         /**
          * Gray returns directly
          * BGR (bytes) or RGB (int) convert to hue (because shadows)
@@ -110,7 +122,7 @@ class DecodedImage(val width: Int, val height: Int) {
                     pixel.toInt() and 0xFF
                 }.toIntArray()
             } else {
-                DecodedImage(this).toHue()
+                toDecodedImage().toHue()
             }
     }
 

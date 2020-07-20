@@ -4,6 +4,7 @@ package info.benjaminhill.video2
 
 import info.benjaminhill.utils.println2
 import info.benjaminhill.utils.toPercent
+import info.benjaminhill.video2.DecodedImage.Companion.toDecodedImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectIndexed
@@ -54,7 +55,7 @@ fun videoToDecodedImages(
                 it.pull()
             } ?: nextFrame
             // Immediately move into a DecodedImage so we don't need to Java2DFrameConverter.cloneBufferedImage
-            emit(DecodedImage(converter.get().convert(filteredFrame)))
+            emit(converter.get().convert(filteredFrame).toDecodedImage())
 
             println2(frameNumber) {
                 "Read frame $frameNumber (${(frameNumber.toDouble() / grabber.lengthInVideoFrames).toPercent()})"

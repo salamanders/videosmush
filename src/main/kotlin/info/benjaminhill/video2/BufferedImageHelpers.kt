@@ -19,9 +19,10 @@ internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedIma
 
     return transform { inputImage->
         if (combinedImage == null) {
-            combinedImage = DecodedImage(inputImage.width, inputImage.height)
+            combinedImage = inputImage
+        } else {
+            combinedImage!! += inputImage
         }
-        combinedImage!! += inputImage
         imageRate.hit()
 
         currentWhittle--
