@@ -3,6 +3,7 @@ package info.benjaminhill.video2
 import info.benjaminhill.utils.averageDiff
 import info.benjaminhill.utils.cachedOrCalculated
 import info.benjaminhill.utils.zipWithNext
+import info.benjaminhill.video2.DecodedImage.Companion.mergeFrames
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flowOn
@@ -48,14 +49,10 @@ fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
 
     println("Writing frames to file.")
     val (fps, images) = videoToDecodedImages(fileInput)
-    TODO()
-    /*
     images.buffer()
         .mergeFrames(sourceFrameCounts).buffer()
         .flowOn(Dispatchers.IO)
         .collectToFile(fileOutput, OUTPUT_FPS)
-
-     */
 }
 
 

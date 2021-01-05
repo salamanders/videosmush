@@ -28,7 +28,6 @@ fun <T> cachedOrCalculated(label: String, exec: suspend () -> T): T = runBlockin
 fun Double.toPercent(): String = "${(100 * this).roundToInt()}%"
 
 
-
 /** Assuming each int maxes out at 255, average diff independent of array size */
 infix fun IntArray.averageDiff(other: IntArray): Double {
     require(isNotEmpty() && size == other.size)

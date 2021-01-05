@@ -5,7 +5,6 @@ import info.benjaminhill.video2.DecodedImage.Companion.mergeFrames
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -15,9 +14,7 @@ import kotlin.time.seconds
 
 const val OUTPUT_FPS = 60.0
 
-val INPUT_FILE = File("/Users/benhill/Documents/screensaver/IMG_8467.mov")
-// "D:\\Recordings\\terry_eclose.mkv"
-
+val INPUT_FILE = File("D:\\Recordings\\terry_eclose.mkv")
 val OUTPUT_FILE = File(INPUT_FILE.parentFile.absolutePath, "scripted_lapse.mp4")
 
 @ExperimentalCoroutinesApi
@@ -29,18 +26,16 @@ fun main(): Unit = runBlocking(Dispatchers.Default) {
 
     val script = customMergeToScript(
         mapOf(
-            "0".hms to 0.1.seconds,
-            "1".hms to 0.5.seconds,
-            //"0".hms  to 10.seconds, // get clear
-            //"12:11:25".hms to 95.seconds, // pop
-            //"12:14:00".hms to 20.seconds, // expand
+            "0".hms to 10.seconds, // get clear
+            "12:11:25".hms to 95.seconds, // pop
+            "12:14:00".hms to 20.seconds, // expand
         ), sourceFps
     )
 
     println("Script: ${script.joinToString(",")}")
 
     images.buffer()
-        .mergeFrames(script)
+        .mergeFrames(script).buffer()
         .flowOn(Dispatchers.Default)
         .collectToFile(OUTPUT_FILE, OUTPUT_FPS)
 }
