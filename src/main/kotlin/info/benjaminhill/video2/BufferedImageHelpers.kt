@@ -1,14 +1,12 @@
 package info.benjaminhill.video2
 
 import info.benjaminhill.utils.CountHits
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.transform
 import java.awt.image.BufferedImage
 import kotlin.time.ExperimentalTime
 
-@ExperimentalCoroutinesApi
 @ExperimentalTime
 internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
     require(merges.isNotEmpty())
