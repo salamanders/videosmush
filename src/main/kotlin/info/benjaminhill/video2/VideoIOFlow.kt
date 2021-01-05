@@ -2,7 +2,7 @@
 
 package info.benjaminhill.video2
 
-import info.benjaminhill.utils.println2
+import info.benjaminhill.utils.logexp
 import info.benjaminhill.utils.toPercent
 import info.benjaminhill.video2.DecodedImage.Companion.toDecodedImage
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +57,7 @@ fun videoToDecodedImages(
             // Immediately move into a DecodedImage so we don't need to Java2DFrameConverter.cloneBufferedImage
             emit(converter.get().convert(filteredFrame).toDecodedImage())
 
-            println2(frameNumber) {
+            logexp(frameNumber) {
                 "Read frame $frameNumber (${(frameNumber.toDouble() / grabber.lengthInVideoFrames).toPercent()})"
             }
 
@@ -89,7 +89,7 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
             println("Starting recording to ${destinationFile.name} (${ffr!!.imageWidth}, ${ffr!!.imageHeight})")
         }
         ffr!!.record(converter.convert(frame), avutil.AV_PIX_FMT_ARGB)
-        println2(frameNumber) { "Recorded frame $frameNumber" }
+        logexp(frameNumber) { "Recorded frame $frameNumber" }
         maxFrameNumber = frameNumber
     }
     ffr?.close()

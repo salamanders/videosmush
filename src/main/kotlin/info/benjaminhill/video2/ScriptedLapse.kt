@@ -16,18 +16,16 @@ const val OUTPUT_FPS = 60.0
 @ExperimentalCoroutinesApi
 @ExperimentalTime
 fun main(): Unit = runBlocking(Dispatchers.Default) {
-    val fileInput = File("/Users/benhill/Downloads/molt3/molt3_normal.mp4").also { require(it.canRead()) }
-    val fileOutput = File("timelapse_molt3.mp4")
+    val fileInput = File("D:\\Recordings\\terry_eclose.mkv").also { require(it.canRead()) }
+    val fileOutput = File("timelapse_terry.mp4")
 
     val (sourceFps, images) = videoToDecodedImages(fileInput)
 
     val script = customMergeToScript(
         mapOf(
-            "0".hms  to 8.seconds, // straighten
-            "32:36".hms to 30.seconds, // pop
-            "37:40".hms to 5.seconds, // grab
-            "42:27".hms to 10.seconds, // dance
-            "2:29:46".hms to 10.seconds // dry
+            "0".hms  to 10.seconds, // get clear
+            "12:11:25".hms to 95.seconds, // pop
+            "12:14:00".hms to 20.seconds, // expand
         ), sourceFps
     )
 
