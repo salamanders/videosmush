@@ -6,10 +6,7 @@ import info.benjaminhill.utils.logexp
 import info.benjaminhill.utils.toPercent
 import info.benjaminhill.video2.DecodedImage.Companion.toDecodedImage
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collectIndexed
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.*
 import org.bytedeco.javacpp.avutil
 import org.bytedeco.javacv.*
 import java.awt.image.BufferedImage
@@ -68,7 +65,8 @@ fun videoToDecodedImages(
         optionalFilter?.close()
         grabber.stop()
         grabber.close()
-    }.flowOn(Dispatchers.Default)
+    }
+        .flowOn(Dispatchers.Default)
 
     return Pair(grabber.videoFrameRate, result)
 }
@@ -79,20 +77,27 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
     var maxFrameNumber = 0
     val converter = Java2DFrameConverter()
 
-    collectIndexed { frameNumber, frame ->
+    onStart {
+        println("Started collecting BI flow to '${destinationFile.absolutePath}'")
+    }.onEmpty {
+        error("Warning: BI flow was empty, nothing written to output file.")
+    }.onCompletion {
+        ffr?.close()
+        println("Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
+    }.collectIndexed { frameNumber, frame ->
+        // "Lazy" construction of the ffr using the first frame
         if (ffr == null) {
-            ffr = FFmpegFrameRecorder(destinationFile.name, frame.width, frame.height, 0)
-            ffr!!.frameRate = fps
-            ffr!!.videoBitrate = 0 // max
-            ffr!!.videoQuality = 0.0 // max?
-            ffr!!.start()
-            println("Starting recording to ${destinationFile.name} (${ffr!!.imageWidth}, ${ffr!!.imageHeight})")
+            ffr = FFmpegFrameRecorder(destinationFile.absolutePath, frame.width, frame.height, 0).apply {
+                frameRate = fps
+                videoBitrate = 0 // max
+                videoQuality = 0.0 // max
+                start()
+            }
+            println("Starting recording to '${destinationFile.absolutePath}' (${ffr!!.imageWidth}, ${ffr!!.imageHeight})")
         }
         ffr!!.record(converter.convert(frame), avutil.AV_PIX_FMT_ARGB)
         logexp(frameNumber) { "Recorded frame $frameNumber" }
         maxFrameNumber = frameNumber
     }
-    ffr?.close()
-    println("Finished writing to ${destinationFile.name} ($maxFrameNumber frames)")
 }
 

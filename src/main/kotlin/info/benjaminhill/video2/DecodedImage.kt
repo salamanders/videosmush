@@ -1,24 +1,29 @@
 package info.benjaminhill.video2
 
+import info.benjaminhill.utils.CountHits
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
+import kotlin.time.ExperimentalTime
 
 /**
  * Image fully parsed out to a full int per each pixel per each channel.
  * NOT memory efficient, but avoids overflows.
  */
 class DecodedImage
-    private constructor(
-            private val width: Int,
-            private val height: Int,
-            private val red: IntArray = IntArray(width * height),
-            private val green: IntArray = IntArray(width * height),
-            private val blue: IntArray = IntArray(width * height),
+private constructor(
+    private val width: Int,
+    private val height: Int,
+    private val red: IntArray = IntArray(width * height),
+    private val green: IntArray = IntArray(width * height),
+    private val blue: IntArray = IntArray(width * height),
 ) {
     // Assume you always have at least one
     private var numAdded = 1
@@ -74,6 +79,8 @@ class DecodedImage
     }
 
     companion object {
+        private fun blankOf(width: Int, height: Int): DecodedImage = DecodedImage(width = width, height = height)
+
         fun BufferedImage.toDecodedImage(): DecodedImage {
             val width = width
             val height = height
@@ -124,6 +131,38 @@ class DecodedImage
             } else {
                 toDecodedImage().toHue()
             }
+
+
+        @ExperimentalTime
+        internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
+            require(merges.isNotEmpty()) { "Empty list of merges, halting." }
+
+            val whittleDown = merges.toMutableList()
+            var currentWhittle = whittleDown.removeAt(0)
+            var combinedImage: DecodedImage? = null
+            val imageRate = CountHits(3_000) { perSec: Int -> "Input running at $perSec images/sec" }
+
+            return transform { inputImage: DecodedImage ->
+                if (combinedImage == null) {
+                    // do NOT keep a reference to the inputImage, very bad things will happen.
+                    combinedImage = blankOf(width = inputImage.width, height = inputImage.height)
+                }
+                combinedImage!! += inputImage
+                imageRate.hit()
+                currentWhittle--
+                if (currentWhittle == 0) {
+                    emit(combinedImage!!.toAverage())
+                }
+                if (currentWhittle < 1 && whittleDown.isNotEmpty()) {
+                    currentWhittle = whittleDown.removeAt(0)
+                }
+
+            }.onCompletion {
+                println("Discarded input frames (should be close to 0): $currentWhittle")
+                println("Remaining unused script frames (should be close to 0): ${whittleDown.size}")
+            }
+        }
+
     }
 
     /** from https://stackoverflow.com/questions/23090019/fastest-formula-to-get-hue-from-rgb/26233318 */
@@ -143,3 +182,7 @@ class DecodedImage
         return hue.toInt()
     }
 }
+
+
+
+

@@ -48,10 +48,14 @@ fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
 
     println("Writing frames to file.")
     val (fps, images) = videoToDecodedImages(fileInput)
+    TODO()
+    /*
     images.buffer()
         .mergeFrames(sourceFrameCounts).buffer()
         .flowOn(Dispatchers.IO)
         .collectToFile(fileOutput, OUTPUT_FPS)
+
+     */
 }
 
 
