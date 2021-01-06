@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.lang.Integer.min
+import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
@@ -24,6 +26,7 @@ fun main(): Unit = runBlocking(Dispatchers.Default) {
 
     val (sourceFps, images) = videoToDecodedImages(fileInput, "crop=in_w:640:0:0")
 
+    // key to next-key compressed to value seconds
     val script = customMergeToScript(
         mapOf(
             "0".hms to 10.seconds, // get clear
@@ -50,19 +53,21 @@ fun customMergeToScript(
     sourceFps: Double
 ): MutableList<Int> {
     val result = mutableListOf<Int>()
-    var currentSourceTime = Duration.ZERO
+    var currentSourceFrame = 0
 
     script.entries.zipWithNext { a, b ->
-        // For each span of time, smush into the value of time.
+        // For each span of time (a.key to b.key), smush into the value of time.
         check(a.key < b.key) { "Keys must be sequential: ${a.key}, ${b.key}" }
         val sourceDurationFrames = (b.key - a.key).inSeconds * sourceFps
         val targetDurationFrames = a.value.inSeconds * OUTPUT_FPS
-        val speedup: Double = sourceDurationFrames / targetDurationFrames
-        check(speedup >= 1.0) { "Bad speedup: $speedup" }
+        val maxFramesCombined = (sourceDurationFrames / targetDurationFrames).roundToInt().coerceAtLeast(1)
+        val endFrameTarget = (b.key.inSeconds * sourceFps).toInt()
 
-        println(" ${speedup}x: smush ${targetDurationFrames.toInt() * speedup.toInt()} frames into ${a.value.inSeconds.toInt()}sec")
-        repeat(targetDurationFrames.toInt()) {
-            result.add(speedup.toInt())
+        while(currentSourceFrame<endFrameTarget) {
+            val stepSize = min(endFrameTarget-currentSourceFrame, maxFramesCombined)
+            check(stepSize>0)
+            result.add(stepSize)
+            currentSourceFrame+=stepSize
         }
     }
     println("Total output time: ${result.size / OUTPUT_FPS}sec")
