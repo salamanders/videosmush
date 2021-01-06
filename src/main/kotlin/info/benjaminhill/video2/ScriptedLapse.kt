@@ -22,13 +22,14 @@ val OUTPUT_FILE = File(INPUT_FILE.parentFile.absolutePath, "scripted_lapse.mp4")
 fun main(): Unit = runBlocking(Dispatchers.Default) {
     val fileInput = INPUT_FILE.also { require(it.canRead()) }
 
-    val (sourceFps, images) = videoToDecodedImages(fileInput)
+    val (sourceFps, images) = videoToDecodedImages(fileInput, "crop=in_w:640:0:0")
 
     val script = customMergeToScript(
         mapOf(
             "0".hms to 10.seconds, // get clear
-            "12:11:25".hms to 95.seconds, // pop
+            "12:11:25".hms to 60.seconds, // pop
             "12:14:00".hms to 20.seconds, // expand
+            "14:42:00".hms to 0.seconds, // end
         ), sourceFps
     )
 
@@ -48,21 +49,23 @@ fun customMergeToScript(
     script: Map<Duration, Duration>,
     sourceFps: Double
 ): MutableList<Int> {
-    println("Keyframes: ${script.keys.joinToString(",")}")
-
     val result = mutableListOf<Int>()
+    var currentSourceTime = Duration.ZERO
+
     script.entries.zipWithNext { a, b ->
+        // For each span of time, smush into the value of time.
         check(a.key < b.key) { "Keys must be sequential: ${a.key}, ${b.key}" }
         val sourceDurationFrames = (b.key - a.key).inSeconds * sourceFps
         val targetDurationFrames = a.value.inSeconds * OUTPUT_FPS
         val speedup: Double = sourceDurationFrames / targetDurationFrames
         check(speedup >= 1.0) { "Bad speedup: $speedup" }
+
+        println(" ${speedup}x: smush ${targetDurationFrames.toInt() * speedup.toInt()} frames into ${a.value.inSeconds.toInt()}sec")
         repeat(targetDurationFrames.toInt()) {
             result.add(speedup.toInt())
         }
     }
     println("Total output time: ${result.size / OUTPUT_FPS}sec")
-    println(result)
     return result
 }
 
