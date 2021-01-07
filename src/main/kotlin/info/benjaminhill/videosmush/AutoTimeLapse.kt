@@ -1,9 +1,8 @@
-package info.benjaminhill.video2
+package info.benjaminhill.videosmush
 
-import info.benjaminhill.utils.averageDiff
-import info.benjaminhill.utils.cachedOrCalculated
+import info.benjaminhill.utils.SimpleCache
 import info.benjaminhill.utils.zipWithNext
-import info.benjaminhill.video2.DecodedImage.Companion.mergeFrames
+import info.benjaminhill.videosmush.DecodedImage.Companion.mergeFrames
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flowOn
@@ -25,29 +24,31 @@ fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     val fileOutput = File("timelapse.mp4")
 
     if (!fileThumbs.canRead()) {
-        println("Creating thumbnail file ${fileThumbs.name}")
+        logger.info { "Creating thumbnail file ${fileThumbs.name}" }
         error("Use `ffmpeg -y -i \"input.mp4\" -filter:v \"crop=in_w*.5:in_h*.5:in_w*.25:in_h*.25,scale=32:32\" -pix_fmt yuv420p thumbs.mp4`")
         //videoToFrames(fileInput, FILTER_THUMB32).collectToFile(fileThumbs, OUTPUT_FPS)
     }
 
-    val diffs = cachedOrCalculated("diffs") {
-        println("Finding pixel differences between thumbnails.")
+    val scDiffs = SimpleCache<String, DoubleArray>(cacheFile = File("imageDiffs.cache.gz"))
+    val diffs = scDiffs("diffs") {
+        logger.info { "Finding pixel differences between thumbnails." }
         val (fps, images) = videoToDecodedImages(fileThumbs)
         images
             .map { it.toHue() }
             .zipWithNext { a, b -> a averageDiff b }
-            .toList()
-    }
+            .toList().toDoubleArray()
+    }.toList()
+
     val betterFrameDiffs = manipulateFrameDiffs(diffs)
     val sourceFrameCounts = frameDiffsToSourceFrameCounts(betterFrameDiffs)
 
-    println(
+    logger.info {
         "Output length: ${sourceFrameCounts.size / OUTPUT_FPS} sec, " +
                 "max merge:${sourceFrameCounts.maxOrNull()}, " +
                 "min merge: ${sourceFrameCounts.minOrNull()}"
-    )
+    }
 
-    println("Writing frames to file.")
+    logger.info { "Writing frames to file." }
     val (fps, images) = videoToDecodedImages(fileInput)
     images.buffer()
         .mergeFrames(sourceFrameCounts).buffer()

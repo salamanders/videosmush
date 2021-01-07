@@ -1,7 +1,7 @@
-package info.benjaminhill.video2
+package info.benjaminhill.videosmush
 
 import info.benjaminhill.utils.hms
-import info.benjaminhill.video2.DecodedImage.Companion.mergeFrames
+import info.benjaminhill.videosmush.DecodedImage.Companion.mergeFrames
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.buffer
@@ -14,7 +14,7 @@ import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
 
-const val OUTPUT_FPS = 60.0
+const val OUTPUT_FPS = 30.0
 
 val INPUT_FILE = File("D:\\Recordings\\terry_eclose.mkv")
 val OUTPUT_FILE = File(INPUT_FILE.parentFile.absolutePath, "scripted_lapse.mp4")
@@ -30,13 +30,13 @@ fun main(): Unit = runBlocking(Dispatchers.Default) {
     val script = customMergeToScript(
         mapOf(
             "0".hms to 10.seconds, // get clear
-            "12:11:25".hms to 60.seconds, // pop
-            "12:14:00".hms to 20.seconds, // expand
+            "12:11:20".hms to 40.seconds, // pop
+            "12:14:00".hms to 10.seconds, // expand
             "14:42:00".hms to 0.seconds, // end
         ), sourceFps
     )
 
-    println("Script: ${script.joinToString(",")}")
+    logger.info {"Script: ${script.joinToString(",")}" }
 
     images.buffer()
         .mergeFrames(script).buffer()
@@ -70,7 +70,7 @@ fun customMergeToScript(
             currentSourceFrame+=stepSize
         }
     }
-    println("Total output time: ${result.size / OUTPUT_FPS}sec")
+    logger.info { "Total output time: ${result.size / OUTPUT_FPS}sec" }
     return result
 }
 

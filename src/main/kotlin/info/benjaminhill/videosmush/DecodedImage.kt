@@ -1,6 +1,7 @@
-package info.benjaminhill.video2
+package info.benjaminhill.videosmush
 
-import info.benjaminhill.utils.CountHits
+import info.benjaminhill.utils.LogInfrequently
+import info.benjaminhill.utils.r
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
@@ -12,6 +13,8 @@ import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
 import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
+import kotlin.time.toDuration
 
 /**
  * Image fully parsed out to a full int per each pixel per each channel.
@@ -140,7 +143,7 @@ private constructor(
             val whittleDown = merges.toMutableList()
             var currentWhittle = whittleDown.removeAt(0)
             var combinedImage: DecodedImage? = null
-            val imageRate = CountHits(3_000) { perSec: Int -> "Input running at $perSec images/sec" }
+            val imageRate = LogInfrequently(10.seconds) { perSec -> "Input running at ${perSec.r} images/sec" }
 
             return transform { inputImage: DecodedImage ->
                 if (combinedImage == null) {
@@ -158,8 +161,8 @@ private constructor(
                 }
 
             }.onCompletion {
-                println("Discarded input frames (should be close to 0): $currentWhittle")
-                println("Remaining unused script frames (should be close to 0): ${whittleDown.size}")
+                logger.info { "Discarded input frames (should be close to 0): $currentWhittle" }
+                logger.info { "Remaining unused script frames (should be close to 0): ${whittleDown.size}" }
             }
         }
 

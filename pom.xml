@@ -20,7 +20,7 @@
         <kotlin.compiler.languageVersion>1.4</kotlin.compiler.languageVersion>
         <junit-jupiter.version>5.6.2</junit-jupiter.version>
 
-        <main.class>info.benjaminhill.video2.ScriptedLapseKt</main.class>
+        <main.class>info.benjaminhill.videosmush.ScriptedLapseKt</main.class>
     </properties>
 
     <repositories>
@@ -87,6 +87,13 @@
 
         <dependency>
             <groupId>org.bytedeco</groupId>
+            <artifactId>javacv-platform</artifactId>
+            <version>1.5.4</version>
+        </dependency>
+
+        <!--
+        <dependency>
+            <groupId>org.bytedeco</groupId>
             <artifactId>javacv</artifactId>
             <version>1.4.3</version>
         </dependency>
@@ -102,6 +109,7 @@
             <artifactId>ffmpeg-platform</artifactId>
             <version>4.0.2-1.4.3</version>
         </dependency>
+        -->
 
         <dependency>
             <groupId>com.natpryce</groupId>
@@ -138,7 +146,7 @@
         <dependency>
             <groupId>com.github.salamanders</groupId>
             <artifactId>utils</artifactId>
-            <version>878b9970e0</version>
+            <version>718e5efa89</version>
         </dependency>
 
     </dependencies>
