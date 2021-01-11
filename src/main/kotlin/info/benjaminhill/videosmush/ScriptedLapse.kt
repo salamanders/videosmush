@@ -16,7 +16,7 @@ import kotlin.time.seconds
 
 const val OUTPUT_FPS = 30.0
 
-val INPUT_FILE = File("D:\\Recordings\\terry_eclose.mkv")
+val INPUT_FILE = File("/Users/benhill/Library/Android/sdk/emulator/resources/macroPreviews/Track_horizontal_plane.mp4")
 val OUTPUT_FILE = File(INPUT_FILE.parentFile.absolutePath, "scripted_lapse.mp4")
 
 @ExperimentalCoroutinesApi
@@ -36,7 +36,7 @@ fun main(): Unit = runBlocking(Dispatchers.Default) {
         ), sourceFps
     )
 
-    logger.info {"Script: ${script.joinToString(",")}" }
+    logger.info { "Script: ${script.joinToString(",")}" }
 
     images.buffer()
         .mergeFrames(script).buffer()
@@ -63,11 +63,11 @@ fun customMergeToScript(
         val maxFramesCombined = (sourceDurationFrames / targetDurationFrames).roundToInt().coerceAtLeast(1)
         val endFrameTarget = (b.key.inSeconds * sourceFps).toInt()
 
-        while(currentSourceFrame<endFrameTarget) {
-            val stepSize = min(endFrameTarget-currentSourceFrame, maxFramesCombined)
-            check(stepSize>0)
+        while (currentSourceFrame < endFrameTarget) {
+            val stepSize = min(endFrameTarget - currentSourceFrame, maxFramesCombined)
+            check(stepSize > 0)
             result.add(stepSize)
-            currentSourceFrame+=stepSize
+            currentSourceFrame += stepSize
         }
     }
     logger.info { "Total output time: ${result.size / OUTPUT_FPS}sec" }

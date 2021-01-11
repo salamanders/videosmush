@@ -14,7 +14,6 @@ import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
 import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
-import kotlin.time.toDuration
 
 /**
  * Image fully parsed out to a full int per each pixel per each channel.
@@ -136,6 +135,10 @@ private constructor(
             }
 
 
+        /**
+         * Takes NX frames from the flow an averages them,
+         * where the merge list is (N1, N2...)
+         */
         @ExperimentalTime
         internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
             require(merges.isNotEmpty()) { "Empty list of merges, halting." }
