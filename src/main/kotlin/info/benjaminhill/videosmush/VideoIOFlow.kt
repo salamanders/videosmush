@@ -92,7 +92,7 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
                 videoQuality = 0.0 // max
                 start()
             }
-            logger.info {"Starting recording to '${destinationFile.absolutePath}' (${ffr!!.imageWidth}, ${ffr!!.imageHeight})" }
+            logger.info { "Starting recording to '${destinationFile.absolutePath}' (${ffr!!.imageWidth}, ${ffr!!.imageHeight})" }
         }
         ffr!!.record(converter.convert(frame), avutil.AV_PIX_FMT_ARGB)
         logexp(frameNumber) { "Recorded frame $frameNumber" }
