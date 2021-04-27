@@ -16,7 +16,7 @@ import kotlin.time.seconds
 
 const val OUTPUT_FPS = 30.0
 
-val INPUT_FILE = File("D:\\Recordings\\terry_eclose.mkv")
+val INPUT_FILE = File("D:\\Recordings\\pupate.mkv")
 val OUTPUT_FILE = File(INPUT_FILE.parentFile.absolutePath, "scripted_lapse.mp4")
 
 @ExperimentalCoroutinesApi
@@ -24,19 +24,21 @@ val OUTPUT_FILE = File(INPUT_FILE.parentFile.absolutePath, "scripted_lapse.mp4")
 fun main(): Unit = runBlocking(Dispatchers.Default) {
     val fileInput = INPUT_FILE.also { require(it.canRead()) }
 
-    val (sourceFps, images) = videoToDecodedImages(fileInput, "crop=in_w:640:0:0")
+    val (sourceFps, images) = videoToDecodedImages(fileInput, "crop=in_w:in_h-170:0:170")
 
     // key to next-key compressed to value seconds
     val script = customMergeToScript(
         mapOf(
-            "0".hms to 10.seconds, // get clear
-            "12:11:20".hms to 40.seconds, // pop
-            "12:14:00".hms to 10.seconds, // expand
-            "14:42:00".hms to 0.seconds, // end
+            "0".hms to 10.seconds, // hang
+            "7:38:00".hms to 10.seconds, // straighten
+            "7:49:00".hms to 20.seconds, // pop
+            "7:54:45".hms to 10.seconds, // grab end
+            "8:06:00".hms to 10.seconds, // wiggle
+            "9:56:00".hms to 10.seconds, // contract
         ), sourceFps
     )
 
-    logger.info {"Script: ${script.joinToString(",")}" }
+    logger.info { "Script: ${script.joinToString(",")}" }
 
     images.buffer()
         .mergeFrames(script).buffer()
@@ -63,11 +65,11 @@ fun customMergeToScript(
         val maxFramesCombined = (sourceDurationFrames / targetDurationFrames).roundToInt().coerceAtLeast(1)
         val endFrameTarget = (b.key.inSeconds * sourceFps).toInt()
 
-        while(currentSourceFrame<endFrameTarget) {
-            val stepSize = min(endFrameTarget-currentSourceFrame, maxFramesCombined)
-            check(stepSize>0)
+        while (currentSourceFrame < endFrameTarget) {
+            val stepSize = min(endFrameTarget - currentSourceFrame, maxFramesCombined)
+            check(stepSize > 0)
             result.add(stepSize)
-            currentSourceFrame+=stepSize
+            currentSourceFrame += stepSize
         }
     }
     logger.info { "Total output time: ${result.size / OUTPUT_FPS}sec" }
