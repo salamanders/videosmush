@@ -10,14 +10,14 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <kotlin.version>1.4.31</kotlin.version>
-        <kotlin.coroutine.version>1.4.2-native-mt</kotlin.coroutine.version>
-        <kotlin.plugin.version>1.4.21-2</kotlin.plugin.version>
+        <kotlin.version>1.6.21</kotlin.version>
+        <kotlin.coroutine.version>1.6.1-native-mt</kotlin.coroutine.version>
+        <kotlin.plugin.version>1.6.21</kotlin.plugin.version>
         <kotlin.code.style>official</kotlin.code.style>
-        <maven.compiler.source>15</maven.compiler.source>
-        <maven.compiler.target>15</maven.compiler.target>
-        <kotlin.compiler.jvmTarget>15</kotlin.compiler.jvmTarget>
-        <kotlin.compiler.languageVersion>1.4</kotlin.compiler.languageVersion>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <kotlin.compiler.jvmTarget>1.8</kotlin.compiler.jvmTarget>
+        <kotlin.compiler.languageVersion>1.6</kotlin.compiler.languageVersion>
         <junit-jupiter.version>5.6.2</junit-jupiter.version>
 
         <main.class>info.benjaminhill.videosmush.ScriptedLapseKt</main.class>
@@ -88,7 +88,7 @@
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>javacv-platform</artifactId>
-            <version>1.5.4</version>
+            <version>1.5.7</version>
         </dependency>
 
         <dependency>
@@ -116,17 +116,16 @@
             <version>${kotlin.coroutine.version}</version>
         </dependency>
 
-        <!-- Logging -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>1.7.30</version>
-        </dependency>
-
         <dependency>
             <groupId>com.github.salamanders</groupId>
             <artifactId>utils</artifactId>
-            <version>718e5efa89</version>
+            <version>20295ea996</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.microutils</groupId>
+            <artifactId>kotlin-logging-jvm</artifactId>
+            <version>2.1.21</version>
         </dependency>
 
     </dependencies>
@@ -139,7 +138,7 @@
                 <artifactId>kotlin-maven-plugin</artifactId>
                 <version>${kotlin.version}</version>
                 <configuration>
-                    <jvmTarget>15</jvmTarget>
+                    <jvmTarget>1.8</jvmTarget>
                     <args>
                         <arg>-Xuse-ir</arg>
                     </args>
@@ -160,8 +159,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>15</source>
-                    <target>15</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
                 <version>3.8.1</version>
                 <executions>

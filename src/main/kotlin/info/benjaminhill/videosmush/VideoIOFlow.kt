@@ -2,7 +2,9 @@
 
 package info.benjaminhill.videosmush
 
-import info.benjaminhill.utils.logexp
+import info.benjaminhill.utils.LogInfrequently
+import info.benjaminhill.utils.logExp
+import info.benjaminhill.utils.r
 import info.benjaminhill.videosmush.DecodedImage.Companion.toDecodedImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -10,8 +12,11 @@ import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.*
 import java.awt.image.BufferedImage
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 
-const val FILTER_THUMB32 = "crop=in_w*.5:in_h*.5:in_w*.25:in_h*.25,scale=32:32"
+// const val FILTER_THUMB32 = "crop=in_w*.5:in_h*.5:in_w*.25:in_h*.25,scale=32:32"
 
 /**
  * @param file ffmpeg-readable video file
@@ -36,7 +41,7 @@ fun videoToDecodedImages(
     }
 
     val optionalFilter = filterStr?.let {
-        logger.info { "Custom filter: `$it`" }
+        LOG.info { "Custom filter: `$it`" }
         val filter = FFmpegFrameFilter(it, grabber.imageWidth, grabber.imageHeight)
         filter.pixelFormat = grabber.pixelFormat
         filter.start()
@@ -53,7 +58,7 @@ fun videoToDecodedImages(
             // Immediately move into a DecodedImage so we don't need to Java2DFrameConverter.cloneBufferedImage
             emit(converter.get().convert(filteredFrame).toDecodedImage())
 
-            logexp(frameNumber) {
+            logExp(frameNumber) {
                 "Read frame $frameNumber (${(frameNumber.toDouble() / grabber.lengthInVideoFrames).toPercent()})"
             }
 
@@ -77,12 +82,12 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
     val converter = Java2DFrameConverter()
 
     onStart {
-        logger.info { "Started collecting BI flow to '${destinationFile.absolutePath}'" }
+        LOG.info { "Started collecting BI flow to '${destinationFile.absolutePath}'" }
     }.onEmpty {
-        logger.error { "Warning: BI flow was empty, nothing written to output file." }
+        LOG.error { "Warning: BI flow was empty, nothing written to output file." }
     }.onCompletion {
         ffr?.close()
-        logger.info { "Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)" }
+        LOG.info { "Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)" }
     }.collectIndexed { frameNumber, frame ->
         // "Lazy" construction of the ffr using the first frame
         if (ffr == null) {
@@ -92,11 +97,52 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
                 videoQuality = 0.0 // max
                 start()
             }
-            logger.info { "Starting recording to '${destinationFile.absolutePath}' (${ffr!!.imageWidth}, ${ffr!!.imageHeight})" }
+            LOG.info { "Starting recording to '${destinationFile.absolutePath}' (${ffr!!.imageWidth}, ${ffr!!.imageHeight})" }
         }
         ffr!!.record(converter.convert(frame), avutil.AV_PIX_FMT_ARGB)
-        logexp(frameNumber) { "Recorded frame $frameNumber" }
+        logExp(frameNumber) { "Recorded frame $frameNumber" }
         maxFrameNumber = frameNumber
+    }
+}
+
+/**
+ * Takes NX frames from the flow an averages them,
+ * where the merge list is (N1, N2...)
+ */
+@ExperimentalTime
+internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
+    require(merges.isNotEmpty()) { "Empty list of merges, halting." }
+
+    val whittleDown = merges.toMutableList()
+    var currentWhittle = whittleDown.removeAt(0)
+    var startingWhittle = currentWhittle
+    lateinit var combinedImage: DecodedImage
+    val isCombinedInit = AtomicBoolean(false)
+    val imageRate = LogInfrequently(30.seconds) { perSec -> "Input running at ${perSec.r} images/sec" }
+
+    return transform { inputImage: DecodedImage ->
+        if (isCombinedInit.compareAndSet(false, true)) {
+            // do NOT keep a reference to the inputImage, very bad things will happen.
+            combinedImage = DecodedImage.blankOf(inputImage.width, inputImage.height)
+        }
+        combinedImage += inputImage
+        imageRate.hit()
+        currentWhittle--
+        if (currentWhittle == 0) {
+            emit(
+                combinedImage
+                    .toAverage()
+                //.addTextWatermark("${startingWhittle}x")
+            )
+        }
+        if (currentWhittle < 1 && whittleDown.isNotEmpty()) {
+            currentWhittle = whittleDown.removeAt(0)
+            startingWhittle = currentWhittle
+        }
+
+    }.onCompletion {
+        LOG.info { "Discarded input frames (should be close to 0): $currentWhittle" }
+        LOG.info { "Remaining unused script frames (should be close to 0): ${whittleDown.size}" }
     }
 }
 

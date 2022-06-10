@@ -257,3 +257,5 @@ $RECYCLE.BIN/
 /thumbs.mp4
 /timelapse.mp4
 /videosmush.iml
+/.gradle/*
+/target/classes/META-INF/videosmush.kotlin_module

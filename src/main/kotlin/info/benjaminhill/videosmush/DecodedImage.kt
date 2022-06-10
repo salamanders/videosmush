@@ -1,19 +1,10 @@
 package info.benjaminhill.videosmush
 
-import info.benjaminhill.utils.LogInfrequently
-import info.benjaminhill.utils.r
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.transform
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
-import kotlin.time.ExperimentalTime
-import kotlin.time.seconds
 
 /**
  * Image fully parsed out to a full int per each pixel per each channel.
@@ -21,8 +12,8 @@ import kotlin.time.seconds
  */
 class DecodedImage
 private constructor(
-    private val width: Int,
-    private val height: Int,
+    internal val width: Int,
+    internal val height: Int,
     private val red: IntArray = IntArray(width * height),
     private val green: IntArray = IntArray(width * height),
     private val blue: IntArray = IntArray(width * height),
@@ -32,9 +23,18 @@ private constructor(
     private val lock = Mutex()
 
     /** Adds pixel RGB values to the internal image */
+
     suspend operator fun plusAssign(other: DecodedImage) {
         lock.withLock(this) {
             numAdded++
+            // ~300 images/second
+            for (i in red.indices) {
+                red[i] += other.red[i]
+                green[i] += other.green[i]
+                blue[i] += other.blue[i]
+            }
+            /*
+            // ~280 images/second
             coroutineScope {
                 launch {
                     for (i in red.indices) {
@@ -51,14 +51,11 @@ private constructor(
                         blue[i] += other.blue[i]
                     }
                 }
-            }
+            }*/
         }
     }
 
-    /** Divides by the number of images, outputs BI, resets to 0.
-     * Because lots of alpha blurs looks bad using regular images.
-     * This is not fast, but it does look correct!
-     */
+
     suspend fun toAverage(): BufferedImage {
         lock.withLock(this) {
             return BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).apply {
@@ -81,7 +78,7 @@ private constructor(
     }
 
     companion object {
-        private fun blankOf(width: Int, height: Int): DecodedImage = DecodedImage(width = width, height = height)
+        internal fun blankOf(width: Int, height: Int): DecodedImage = DecodedImage(width = width, height = height)
 
         fun BufferedImage.toDecodedImage(): DecodedImage {
             val width = width
@@ -133,42 +130,6 @@ private constructor(
             } else {
                 toDecodedImage().toHue()
             }
-
-
-        /**
-         * Takes NX frames from the flow an averages them,
-         * where the merge list is (N1, N2...)
-         */
-        @ExperimentalTime
-        internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
-            require(merges.isNotEmpty()) { "Empty list of merges, halting." }
-
-            val whittleDown = merges.toMutableList()
-            var currentWhittle = whittleDown.removeAt(0)
-            var combinedImage: DecodedImage? = null
-            val imageRate = LogInfrequently(10.seconds) { perSec -> "Input running at ${perSec.r} images/sec" }
-
-            return transform { inputImage: DecodedImage ->
-                if (combinedImage == null) {
-                    // do NOT keep a reference to the inputImage, very bad things will happen.
-                    combinedImage = blankOf(width = inputImage.width, height = inputImage.height)
-                }
-                combinedImage!! += inputImage
-                imageRate.hit()
-                currentWhittle--
-                if (currentWhittle == 0) {
-                    emit(combinedImage!!.toAverage())
-                }
-                if (currentWhittle < 1 && whittleDown.isNotEmpty()) {
-                    currentWhittle = whittleDown.removeAt(0)
-                }
-
-            }.onCompletion {
-                logger.info { "Discarded input frames (should be close to 0): $currentWhittle" }
-                logger.info { "Remaining unused script frames (should be close to 0): ${whittleDown.size}" }
-            }
-        }
-
     }
 
     /** from https://stackoverflow.com/questions/23090019/fastest-formula-to-get-hue-from-rgb/26233318 */
