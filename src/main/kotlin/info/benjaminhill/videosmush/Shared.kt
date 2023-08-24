@@ -18,7 +18,7 @@ fun Double.toPercent(): String = "${(100 * this).roundToInt()}%"
 /** Assuming each int maxes out at 255, average diff independent of array size */
 infix fun IntArray.averageDiff(other: IntArray): Double {
     require(isNotEmpty() && size == other.size)
-    return (size - 1 downTo 1).sumOf { idx ->
+    return (size - 1 downTo 0).sumOf { idx ->
         abs(this[idx] - other[idx])
     } / (255 * size.toDouble())
 }

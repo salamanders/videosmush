@@ -100,6 +100,7 @@ private constructor(
                         blue[i] = data[i * stepSize + 0].toInt() and 0xFF
                     }
                 }
+
                 BufferedImage.TYPE_INT_RGB,
                 BufferedImage.TYPE_INT_BGR,
                 BufferedImage.TYPE_INT_ARGB,
@@ -112,6 +113,7 @@ private constructor(
                         blue[i] = (data[i] shr 0 and 0xFF)
                     }
                 }
+
                 else -> throw IllegalArgumentException("Bad image type: $type")
             }
             return DecodedImage(width, height, red, green, blue)

@@ -14,7 +14,6 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 
 // const val FILTER_THUMB32 = "crop=in_w*.5:in_h*.5:in_w*.25:in_h*.25,scale=32:32"
 
@@ -55,7 +54,7 @@ fun videoToDecodedImages(
                 it.push(nextFrame)
                 it.pull()
             } ?: nextFrame
-            // Immediately move into a DecodedImage so we don't need to Java2DFrameConverter.cloneBufferedImage
+            // Immediately move into a DecodedImage, so we don't need to Java2DFrameConverter.cloneBufferedImage
             emit(converter.get().convert(filteredFrame).toDecodedImage())
 
             logExp(frameNumber) {
@@ -109,13 +108,12 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
  * Takes NX frames from the flow an averages them,
  * where the merge list is (N1, N2...)
  */
-@ExperimentalTime
 internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
     require(merges.isNotEmpty()) { "Empty list of merges, halting." }
 
     val whittleDown = merges.toMutableList()
     var currentWhittle = whittleDown.removeAt(0)
-    var startingWhittle = currentWhittle
+
     lateinit var combinedImage: DecodedImage
     val isCombinedInit = AtomicBoolean(false)
     val imageRate = LogInfrequently(30.seconds) { perSec -> "Input running at ${perSec.r} images/sec" }
@@ -137,7 +135,6 @@ internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedIma
         }
         if (currentWhittle < 1 && whittleDown.isNotEmpty()) {
             currentWhittle = whittleDown.removeAt(0)
-            startingWhittle = currentWhittle
         }
 
     }.onCompletion {

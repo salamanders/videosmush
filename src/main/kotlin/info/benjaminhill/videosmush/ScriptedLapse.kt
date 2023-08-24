@@ -3,7 +3,6 @@ package info.benjaminhill.videosmush
 
 import info.benjaminhill.utils.hms
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flowOn
@@ -15,7 +14,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 import kotlin.time.DurationUnit
-import kotlin.time.ExperimentalTime
 
 const val OUTPUT_FPS = 60.0
 
@@ -38,10 +36,8 @@ val keyframes: Map<Duration, Duration> = mapOf(
 )
 
 
-@ExperimentalCoroutinesApi
-@ExperimentalTime
 fun main(): Unit = runBlocking(Dispatchers.Default) {
-    val fileInput = INPUT_FILE.also { require(it.canRead()) }
+    val fileInput = INPUT_FILE.also { require(it.canRead()) { "Missing `${it.absolutePath}`" } }
 
     val (sourceFps, images) = videoToDecodedImages(fileInput)
 
@@ -59,7 +55,6 @@ fun main(): Unit = runBlocking(Dispatchers.Default) {
 /**
  * Transform a script (starting at time X, convert the following segment to duration Y) to frame-merge-counts
  */
-@ExperimentalTime
 fun customMergeToScript(
     script: Map<Duration, Duration>,
     sourceFps: Double

@@ -10,12 +10,10 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.nield.kotlinstatistics.standardDeviation
 import java.io.File
-import kotlin.time.ExperimentalTime
 
 private const val OUTPUT_SECONDS = 30.0
 private const val OUTPUT_FRAMES = OUTPUT_SECONDS * OUTPUT_FPS
 
-@ExperimentalTime
 fun autoTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     val fileInput = File("input.mp4")
     val fileThumbs = File("thumbs.mp4")
