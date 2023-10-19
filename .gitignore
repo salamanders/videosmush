@@ -252,10 +252,8 @@ $RECYCLE.BIN/
 
 # End of https://www.gitignore.io/api/osx,java,kotlin,windows,eclipse,netbeans,intellij
 /.idea/
-/diffs.ser.gz
-/input.mp4
-/thumbs.mp4
-/timelapse.mp4
+/*.mp4
 /videosmush.iml
 /.gradle/*
 /target/classes/META-INF/videosmush.kotlin_module
+/input/*

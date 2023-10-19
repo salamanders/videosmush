@@ -1,0 +1,59 @@
+@file:Suppress("BlockingMethodInNonBlockingContext")
+
+package info.benjaminhill.videosmush.old
+
+import info.benjaminhill.utils.LogInfrequently
+import info.benjaminhill.utils.logExp
+import info.benjaminhill.utils.r
+import info.benjaminhill.videosmush.DecodedImage.Companion.toDecodedImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
+import org.bytedeco.ffmpeg.global.avutil
+import org.bytedeco.javacv.*
+import java.awt.image.BufferedImage
+import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.seconds
+
+
+
+
+/**
+ * Takes NX frames from the flow an averages them,
+ * where the merge list is (N1, N2...)
+ */
+internal fun Flow<DecodedImage>.mergeFrames(merges: List<Int>): Flow<BufferedImage> {
+    require(merges.isNotEmpty()) { "Empty list of merges, halting." }
+
+    val whittleDown = merges.toMutableList()
+    var currentWhittle = whittleDown.removeAt(0)
+
+    lateinit var combinedImage: DecodedImage
+    val isCombinedInit = AtomicBoolean(false)
+    val imageRate = LogInfrequently(30.seconds) { perSec -> "Input running at ${perSec.r} images/sec" }
+
+    return transform { inputImage: DecodedImage ->
+        if (isCombinedInit.compareAndSet(false, true)) {
+            // do NOT keep a reference to the inputImage, very bad things will happen.
+            combinedImage = DecodedImage.blankOf(inputImage.width, inputImage.height)
+        }
+        combinedImage += inputImage
+        imageRate.hit()
+        currentWhittle--
+        if (currentWhittle == 0) {
+            emit(
+                combinedImage
+                    .toAverage()
+                //.addTextWatermark("${startingWhittle}x")
+            )
+        }
+        if (currentWhittle < 1 && whittleDown.isNotEmpty()) {
+            currentWhittle = whittleDown.removeAt(0)
+        }
+
+    }.onCompletion {
+        LOG.info { "Discarded input frames (should be close to 0): $currentWhittle" }
+        LOG.info { "Remaining unused script frames (should be close to 0): ${whittleDown.size}" }
+    }
+}
+
