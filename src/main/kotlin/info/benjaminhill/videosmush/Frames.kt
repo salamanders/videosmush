@@ -7,7 +7,7 @@ import org.bytedeco.javacv.*
 import java.awt.image.BufferedImage
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.atomic.LongAdder
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isReadable
 import kotlin.io.path.isRegularFile
@@ -20,9 +20,9 @@ fun Path.toBufferedImages(
 ): Flow<BufferedImage> {
     var optionalFilter: FFmpegFrameFilter? = null
     var grabber: FFmpegFrameGrabber? = null
-    val numConverters = LongAdder()
+    val numFrames = AtomicLong()
      val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
-        override fun initialValue() = Java2DFrameConverter().also { numConverters.increment() }
+        override fun initialValue() = Java2DFrameConverter()
     }
     require(this.isReadable()) { "Unable to read top-level file or folder $this" }
     return if (this.isDirectory()) {
@@ -34,12 +34,13 @@ fun Path.toBufferedImages(
         require(Files.isRegularFile(this)) { "Expected path to be a plain file: $this" }
         val sourceFile = this.toFile()
         flow<BufferedImage> {
-            while (true) {
+            while (numFrames.get() < 1_000) {
                 emit(grabber!!.grabImage()?.let { frame ->
                     val possiblyFilteredFrame: Frame = optionalFilter?.let { filter ->
                         filter.push(frame)
                         filter.pull()
                     } ?: frame
+                    numFrames.incrementAndGet()
                     // Don't clone, because immediately converted to a BI.
                     converter.get().convert(possiblyFilteredFrame)
                 } ?: break)
@@ -59,10 +60,9 @@ fun Path.toBufferedImages(
         }.onCompletion {
             optionalFilter?.stop()
             optionalFilter?.close()
-            grabber?.stop()
-            grabber?.close()
-            println("Finished reading from: $sourceFile")
-            println("Created ${numConverters.sum()} converters.")
+            grabber!!.stop()
+            grabber!!.close()
+            println("Finished reading from: $sourceFile, ${numFrames.get()} frames.")
         }
     }
 }
