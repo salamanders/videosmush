@@ -1,7 +1,8 @@
 package info.benjaminhill.videosmush
 
-import org.bytedeco.javacpp.indexer.UByteIndexer
 import org.bytedeco.javacv.Frame
+import org.bytedeco.javacv.FrameConverter
+import org.bytedeco.javacv.Java2DFrameConverter
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
@@ -23,6 +24,10 @@ private constructor(
     var numAdded = 1
         private set
 
+    operator fun plusAssign(other: Frame) {
+        plusAssign(converter.get().convert(other))
+        other.close()
+    }
     /**
      * Merge in another BufferedImage without converting the whole thing.
      */
@@ -98,6 +103,9 @@ private constructor(
     }
 
     companion object {
+        val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
+            override fun initialValue() = Java2DFrameConverter()
+        }
         internal fun blankOf(width: Int, height: Int): AveragingImage =
             AveragingImage(width = width, height = height).also {
                 it.numAdded = 0

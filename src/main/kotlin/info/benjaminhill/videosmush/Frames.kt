@@ -3,69 +3,65 @@ package info.benjaminhill.videosmush
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import org.bytedeco.ffmpeg.global.avutil
-import org.bytedeco.javacv.*
-import java.awt.image.BufferedImage
+import org.bytedeco.javacv.FFmpegFrameFilter
+import org.bytedeco.javacv.FFmpegFrameGrabber
+import org.bytedeco.javacv.Frame
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.io.path.isDirectory
-import kotlin.io.path.isReadable
-import kotlin.io.path.isRegularFile
 
 private const val FILTER_THUMB = "scale=128:-1"
 
-/** Compact way of generating a series of Frames */
-fun Path.toBufferedImages(
-    isThumbnail: Boolean
-): Flow<BufferedImage> {
-    var optionalFilter: FFmpegFrameFilter? = null
-    var grabber: FFmpegFrameGrabber? = null
+
+/** Compact way of generating a flow of images */
+fun Path.toFrames(
+    isThumbnail: Boolean,
+    rotFilter: String,
+    maxFrames: Long = Long.MAX_VALUE - 1
+): Flow<Frame> {
+    require(Files.isReadable(this)) { "Unable to read file: $this" }
+    require(Files.isRegularFile(this)) { "Expected path to be a plain file: $this" }
+    val sourceFile = this.toFile()
     val numFrames = AtomicLong()
-     val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
-        override fun initialValue() = Java2DFrameConverter()
-    }
-    require(this.isReadable()) { "Unable to read top-level file or folder $this" }
-    return if (this.isDirectory()) {
-        Files.walk(this).filter { it.isRegularFile() }.map { it.toBufferedImages(isThumbnail) }.reduce { result, element ->
-                concatenate(result, element)
-            }.orElseThrow()
-    } else {
-        require(Files.isReadable(this)) { "Unable to read file: $this" }
-        require(Files.isRegularFile(this)) { "Expected path to be a plain file: $this" }
-        val sourceFile = this.toFile()
-        flow<BufferedImage> {
-            while (numFrames.get() < 1_000) {
-                emit(grabber!!.grabImage()?.let { frame ->
-                    val possiblyFilteredFrame: Frame = optionalFilter?.let { filter ->
-                        filter.push(frame)
-                        filter.pull()
-                    } ?: frame
-                    numFrames.incrementAndGet()
-                    // Don't clone, because immediately converted to a BI.
-                    converter.get().convert(possiblyFilteredFrame)
-                } ?: break)
+    var grabber: FFmpegFrameGrabber? = null
+    var videoFilter: FFmpegFrameFilter? = null
+
+    return flow<Frame> {
+        while (numFrames.get() < maxFrames) {
+            val nextFrame = grabber!!.grabImage() ?: break
+            if (numFrames.incrementAndGet() % 1_000L == 0L) {
+                println(" ${sourceFile.name} ${numFrames.get()}")
             }
-        }.onStart {
-            println("Starting reading from: $sourceFile")
-            avutil.av_log_set_level(avutil.AV_LOG_QUIET)
-            grabber = FFmpegFrameGrabber(sourceFile)
-            grabber!!.start()
-            val inputWidth: Int = grabber!!.imageWidth
-            val inputHeight: Int = grabber!!.imageHeight
-            if (isThumbnail) {
-                optionalFilter = FFmpegFrameFilter(FILTER_THUMB, inputWidth, inputHeight)
-                optionalFilter!!.pixelFormat = grabber!!.pixelFormat
-                optionalFilter!!.start()
-            }
-        }.onCompletion {
-            optionalFilter?.stop()
-            optionalFilter?.close()
-            grabber!!.stop()
-            grabber!!.close()
-            println("Finished reading from: $sourceFile, ${numFrames.get()} frames.")
+            videoFilter!!.push(nextFrame)
+            emit(videoFilter!!.pull().clone())
         }
+    }.onStart {
+        avutil.av_log_set_level(avutil.AV_LOG_QUIET)
+        println("Starting $sourceFile")
+        grabber = FFmpegFrameGrabber(sourceFile).also { gr ->
+            gr.start()
+            val videoFilterString = listOfNotNull(
+                rotFilter,
+                if (isThumbnail) {
+                    FILTER_THUMB
+                } else {
+                    null
+                }
+            ).joinToString(",")
+            println("  Filter: `$videoFilterString` on ${gr.imageWidth}, ${gr.imageHeight}")
+            videoFilter = FFmpegFrameFilter(videoFilterString, gr.imageWidth, gr.imageHeight).also { vf ->
+                vf.pixelFormat = gr.pixelFormat
+                vf.start()
+            }
+        }
+    }.onCompletion {
+        videoFilter!!.stop()
+        videoFilter!!.close()
+        grabber!!.stop()
+        grabber!!.close()
+        println("Finished reading from: $sourceFile, ${numFrames.get()} frames.")
     }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-private fun <T> concatenate(vararg flows: Flow<T>) = flows.asFlow().flattenConcat()
+fun <T> concatenate(vararg flows: Flow<T>) = flows.asFlow().flattenConcat()

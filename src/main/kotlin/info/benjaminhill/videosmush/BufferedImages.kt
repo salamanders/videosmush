@@ -3,6 +3,7 @@ package info.benjaminhill.videosmush
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectIndexed
 import kotlinx.coroutines.flow.onCompletion
+import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameRecorder
 import org.bytedeco.javacv.Java2DFrameConverter
@@ -25,6 +26,8 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
                     frameRate = fps
                     videoBitrate = 0 // max
                     videoQuality = 0.0 // max
+                    setVideoOption("threads", "auto")
+                    videoCodec = avcodec.AV_CODEC_ID_H264
                     start()
                 }
             }

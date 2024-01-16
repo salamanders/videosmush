@@ -5,6 +5,7 @@ fun BufferedImage.deepCopy(): BufferedImage {
     return BufferedImage(cm, raster, isAlphaPremultiplied, null)
 }
 
+
 /**
  * Crashes, maybe a bug in this filter, maybe a bug in the implementation
  */
