@@ -60,10 +60,12 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
         println(it)
     }
 
-    allSources.map { it.path.toFrames(
-        isThumbnail = false,
-        rotFilter = "transpose=1",
-    ) }
+    allSources.map {
+        it.path.toFrames(
+            isThumbnail = false,
+            rotFilter = "transpose=1",
+        )
+    }
         .reduce { acc, flow ->
             arrayOf(acc, flow).asFlow().flattenConcat()
         }.transform { frame ->

@@ -59,7 +59,7 @@ fun Path.toFrames(
             if (numFrames.incrementAndGet() % 5_000L == 0L) {
                 println(" ${sourceFile.name} ${numFrames.get()}")
             }
-            if(videoFilter != null) {
+            if (videoFilter != null) {
                 videoFilter!!.push(nextFrame)
                 emit(videoFilter!!.pull().clone())
             } else {
@@ -81,7 +81,7 @@ fun Path.toFrames(
                 }
             ).joinToString(",")
             println("  Filter: `$videoFilterString` on ${gr.imageWidth}, ${gr.imageHeight}")
-            if(videoFilterString.isNotBlank()) {
+            if (videoFilterString.isNotBlank()) {
                 videoFilter = FFmpegFrameFilter(videoFilterString, gr.imageWidth, gr.imageHeight).also { vf ->
                     vf.pixelFormat = gr.pixelFormat
                     vf.start()
