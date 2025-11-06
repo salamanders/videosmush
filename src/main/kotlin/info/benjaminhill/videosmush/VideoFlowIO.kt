@@ -4,23 +4,28 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
-import org.bytedeco.javacv.*
+import org.bytedeco.javacv.FFmpegFrameFilter
+import org.bytedeco.javacv.FFmpegFrameGrabber
+import org.bytedeco.javacv.FFmpegFrameRecorder
+import org.bytedeco.javacv.Java2DFrameConverter
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
+private const val FILTER_THUMB = "scale=128:-1"
 
 /** Need to get fancy with the thread local objects to keep from crashing (I think.) */
-suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double = 60.0) {
+suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double = 60.0, isLossless: Boolean = false) {
     var ffr: FFmpegFrameRecorder? = null
     var maxFrameNumber = 0
     val converter = Java2DFrameConverter()
-    println("Started collecting Sequence<BufferedImage> to '${destinationFile.absolutePath}'")
+    println("Started collecting Flow<BufferedImage> to '${destinationFile.absolutePath}'")
     this.onCompletion {
-        println("Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
+        println("Finishing writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
         ffr?.close()
+        println("Closed")
     }.collectIndexed { index, image ->
         if (ffr == null) {
             ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
@@ -28,48 +33,21 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
                 videoBitrate = 0 // max
                 videoQuality = 0.0 // max
                 setVideoOption("threads", "auto")
-                videoCodec = avcodec.AV_CODEC_ID_AV1
+                videoCodec = if (isLossless) avcodec.AV_CODEC_ID_FFV1 else avcodec.AV_CODEC_ID_AV1
                 start()
             }
         }
-        ffr.record(converter.convert(image), avutil.AV_PIX_FMT_ARGB)
+        ffr.record(converter.convert(image), PixelFormat.ARGB.ffmpeg)
         maxFrameNumber = index
     }
 }
-
-/** A new version of collectToFile that uses a lossless codec. */
-suspend fun Flow<BufferedImage>.collectToFileLossless(destinationFile: File, fps: Double = 60.0) {
-    var ffr: FFmpegFrameRecorder? = null
-    var maxFrameNumber = 0
-    val converter = Java2DFrameConverter()
-    println("Started collecting Sequence<BufferedImage> to '${destinationFile.absolutePath}'")
-    this.onCompletion {
-        println("Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
-        ffr?.close()
-    }.collectIndexed { index, image ->
-        if (ffr == null) {
-            ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
-                frameRate = fps
-                videoBitrate = 0 // max
-                videoQuality = 0.0 // max
-                setVideoOption("threads", "auto")
-                videoCodec = avcodec.AV_CODEC_ID_FFV1
-                start()
-            }
-        }
-        ffr.record(converter.convert(image), avutil.AV_PIX_FMT_ARGB)
-        maxFrameNumber = index
-    }
-}
-
-private const val FILTER_THUMB = "scale=128:-1"
 
 /** Compact way of generating a flow of images */
 fun Path.toFrames(
     isThumbnail: Boolean,
     rotFilter: String?,
     maxFrames: Long = Long.MAX_VALUE - 1
-): Flow<Frame> {
+): Flow<FrameWithPixelFormat> {
     require(Files.isReadable(this)) { "Unable to read file: $this" }
     require(Files.isRegularFile(this)) { "Expected path to be a plain file: $this" }
     val sourceFile = this.toFile()
@@ -77,7 +55,7 @@ fun Path.toFrames(
     var grabber: FFmpegFrameGrabber? = null
     var videoFilter: FFmpegFrameFilter? = null
 
-    return flow<Frame> {
+    return flow {
         while (numFrames.get() < maxFrames) {
             val nextFrame = grabber!!.grabImage() ?: break
             if (numFrames.incrementAndGet() % 5_000L == 0L) {
@@ -85,9 +63,9 @@ fun Path.toFrames(
             }
             if (videoFilter != null) {
                 videoFilter!!.push(nextFrame)
-                emit(videoFilter!!.pull().clone())
+                emit(FrameWithPixelFormat.ofFfmpeg(videoFilter!!.pull().clone(), grabber!!.pixelFormat))
             } else {
-                emit(nextFrame.clone())
+                emit(FrameWithPixelFormat.ofFfmpeg(nextFrame.clone(), grabber!!.pixelFormat))
             }
 
         }

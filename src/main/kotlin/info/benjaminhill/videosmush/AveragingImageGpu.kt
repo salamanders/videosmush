@@ -1,6 +1,5 @@
 package info.benjaminhill.videosmush
 
-import org.bytedeco.javacv.Frame
 import org.jocl.*
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
@@ -9,9 +8,7 @@ import java.awt.image.DataBufferInt
 class AveragingImageGpu private constructor(
     override val width: Int,
     override val height: Int,
-) : AveragingImage {
-    override var numAdded = 0
-        private set
+) : BaseAveragingImage(width, height) {
 
     private val programSource = """
        __kernel void sum_byte(__global int *sums, __global const uchar *imageData, int stepSize) {
@@ -70,63 +67,118 @@ class AveragingImageGpu private constructor(
         kernelByte = CL.clCreateKernel(program, "sum_byte", null)
         kernelInt = CL.clCreateKernel(program, "sum_int", null)
 
-        sumsMem = CL.clCreateBuffer(context, CL.CL_MEM_READ_WRITE, (width * height * 3 * Sizeof.cl_int).toLong(), null, null)
+        sumsMem =
+            CL.clCreateBuffer(context, CL.CL_MEM_READ_WRITE, (width * height * 3 * Sizeof.cl_int).toLong(), null, null)
     }
 
-    override operator fun plusAssign(other: Frame) {
-        plusAssign(AveragingImage2.converter.get().convert(other))
-        other.close()
+    override suspend operator fun plusAssign(other: FrameWithPixelFormat) {
+        plusAssign(AveragingImageBIDirect.converter.get().convert(other.frame))
+        other.frame.close()
     }
 
-    override operator fun plusAssign(other: BufferedImage) {
+    override suspend operator fun plusAssign(other: BufferedImage) {
         numAdded++
         when (other.type) {
             BufferedImage.TYPE_3BYTE_BGR, BufferedImage.TYPE_4BYTE_ABGR -> {
                 val data = (other.raster.dataBuffer as DataBufferByte).data
                 val stepSize = if (other.alphaRaster == null) 3 else 4
-                val dataMem = CL.clCreateBuffer(context, CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR, (data.size * Sizeof.cl_char).toLong(), Pointer.to(data), null)
+                val dataMem = CL.clCreateBuffer(
+                    context,
+                    CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR,
+                    (data.size * Sizeof.cl_char).toLong(),
+                    Pointer.to(data),
+                    null
+                )
 
                 CL.clSetKernelArg(kernelByte, 0, Sizeof.cl_mem.toLong(), Pointer.to(sumsMem))
                 CL.clSetKernelArg(kernelByte, 1, Sizeof.cl_mem.toLong(), Pointer.to(dataMem))
                 CL.clSetKernelArg(kernelByte, 2, Sizeof.cl_int.toLong(), Pointer.to(intArrayOf(stepSize)))
 
-                CL.clEnqueueNDRangeKernel(commandQueue, kernelByte, 1, null, longArrayOf(width.toLong() * height.toLong()), null, 0, null, null)
+                CL.clEnqueueNDRangeKernel(
+                    commandQueue,
+                    kernelByte,
+                    1,
+                    null,
+                    longArrayOf(width.toLong() * height.toLong()),
+                    null,
+                    0,
+                    null,
+                    null
+                )
                 CL.clReleaseMemObject(dataMem)
             }
+
             BufferedImage.TYPE_INT_RGB, BufferedImage.TYPE_INT_BGR, BufferedImage.TYPE_INT_ARGB -> {
                 val data = (other.raster.dataBuffer as DataBufferInt).data
-                val dataMem = CL.clCreateBuffer(context, CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR, (data.size * Sizeof.cl_int).toLong(), Pointer.to(data), null)
+                val dataMem = CL.clCreateBuffer(
+                    context,
+                    CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR,
+                    (data.size * Sizeof.cl_int).toLong(),
+                    Pointer.to(data),
+                    null
+                )
 
                 CL.clSetKernelArg(kernelInt, 0, Sizeof.cl_mem.toLong(), Pointer.to(sumsMem))
                 CL.clSetKernelArg(kernelInt, 1, Sizeof.cl_mem.toLong(), Pointer.to(dataMem))
 
-                CL.clEnqueueNDRangeKernel(commandQueue, kernelInt, 1, null, longArrayOf(width.toLong() * height.toLong()), null, 0, null, null)
+                CL.clEnqueueNDRangeKernel(
+                    commandQueue,
+                    kernelInt,
+                    1,
+                    null,
+                    longArrayOf(width.toLong() * height.toLong()),
+                    null,
+                    0,
+                    null,
+                    null
+                )
                 CL.clReleaseMemObject(dataMem)
             }
+
             else -> throw IllegalArgumentException("Unsupported image type: ${other.type}")
         }
     }
 
     override fun toBufferedImage(): BufferedImage {
         val sums = IntArray(width * height * 3)
-        CL.clEnqueueReadBuffer(commandQueue, sumsMem, true, 0, (sums.size * Sizeof.cl_int).toLong(), Pointer.to(sums), 0, null, null)
+        CL.clEnqueueReadBuffer(
+            commandQueue,
+            sumsMem,
+            true,
+            0,
+            (sums.size * Sizeof.cl_int).toLong(),
+            Pointer.to(sums),
+            0,
+            null,
+            null
+        )
 
         return BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).apply {
             val pixels = IntArray(width * height) { i ->
-                val r = (sums[i * 3 + 0] / numAdded) and 0xFF
-                val g = (sums[i * 3 + 1] / numAdded) and 0xFF
-                val b = (sums[i * 3 + 2] / numAdded) and 0xFF
+                val r = (sums[i * 3 + 0].toFloat() / numAdded).toInt().coerceIn(0, 255)
+                val g = (sums[i * 3 + 1].toFloat() / numAdded).toInt().coerceIn(0, 255)
+                val b = (sums[i * 3 + 2].toFloat() / numAdded).toInt().coerceIn(0, 255)
                 (r shl 16) or (g shl 8) or b
             }
             setRGB(0, 0, width, height, pixels, 0, width)
         }.also {
             val zero = IntArray(sums.size)
-            CL.clEnqueueWriteBuffer(commandQueue, sumsMem, true, 0, (zero.size * Sizeof.cl_int).toLong(), Pointer.to(zero), 0, null, null)
+            CL.clEnqueueWriteBuffer(
+                commandQueue,
+                sumsMem,
+                true,
+                0,
+                (zero.size * Sizeof.cl_int).toLong(),
+                Pointer.to(zero),
+                0,
+                null,
+                null
+            )
             numAdded = 0
         }
     }
 
-    fun release() {
+    override fun close() {
         CL.clReleaseMemObject(sumsMem)
         CL.clReleaseKernel(kernelByte)
         CL.clReleaseKernel(kernelInt)
@@ -135,8 +187,6 @@ class AveragingImageGpu private constructor(
     }
 
     companion object {
-        fun blankOf(width: Int, height: Int): AveragingImageGpu {
-            return AveragingImageGpu(width, height)
-        }
+        fun blankOf(width: Int, height: Int): AveragingImage = AveragingImageGpu(width, height)
     }
 }

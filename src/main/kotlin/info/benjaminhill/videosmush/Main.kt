@@ -8,9 +8,11 @@ import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import java.io.File
 import java.nio.file.Path
+import kotlin.io.path.name
 import kotlin.io.path.readLines
 import kotlin.io.path.walk
 import kotlin.math.ceil
+
 
 val outputVideoFile = File("output.mp4")
 
@@ -19,7 +21,7 @@ suspend fun main() {
 
     // Determine the length of each source in frames
     val allSources: List<Source> = Path.of("inputs").walk()
-        .filter { it.toFile().isFile }
+        .filter { it.toFile().isFile && !it.name.startsWith(".") }
         .sorted()
         .map { path ->
             FFmpegFrameGrabber(path.toString()).use { grabber ->
@@ -38,8 +40,6 @@ suspend fun main() {
 
     smush(allSources, script)
 }
-
-private const val USE_GPU = true
 
 @OptIn(ExperimentalCoroutinesApi::class)
 suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
@@ -63,6 +63,7 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
     }
 
     try {
+        var previousRatio = 0
         allSources.map {
             it.path.toFrames(
                 isThumbnail = false,
@@ -71,27 +72,27 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
         }
             .reduce { acc, flow ->
                 arrayOf(acc, flow).asFlow().flattenConcat()
-            }.transform { frame ->
-                val localAveragingImage =
-                    averagingImage ?: if (USE_GPU) {
-                        AveragingImageGpu.blankOf(frame.imageWidth, frame.imageHeight)
-                    } else {
-                        AveragingImage2.blankOf(frame.imageWidth, frame.imageHeight)
-                    }.also {
+            }.transform { frameWithPixelFormat ->
+                val frame = frameWithPixelFormat.frame
+                val localAveragingImage: AveragingImage =
+                    averagingImage ?: AveragingImageRGB.blankOf(frame.imageWidth, frame.imageHeight).also {
                         println("Averaging into an image: ${it.width} x ${it.height}")
                         @Suppress("ASSIGNED_VALUE_IS_NEVER_READ")
                         averagingImage = it
                     }
-                localAveragingImage += frame
+                localAveragingImage += frameWithPixelFormat
                 currentFrame++
 
                 val ratio = ratios.firstOrNull { currentFrame <= it.first }?.second ?: ratios.last().second
-
+                if (ratio != previousRatio) {
+                    println("RATIO: $ratio")
+                    previousRatio = ratio
+                }
                 if (localAveragingImage.numAdded >= ratio) {
                     emit(localAveragingImage.toBufferedImage())
                 }
             }.collectToFile(outputVideoFile)
     } finally {
-        (averagingImage as? AveragingImageGpu)?.release()
+        averagingImage?.close()
     }
 }

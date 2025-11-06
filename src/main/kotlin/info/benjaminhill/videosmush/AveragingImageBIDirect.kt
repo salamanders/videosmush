@@ -1,6 +1,5 @@
 package info.benjaminhill.videosmush
 
-import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameConverter
 import org.bytedeco.javacv.Java2DFrameConverter
 import java.awt.image.BufferedImage
@@ -11,25 +10,22 @@ import java.awt.image.DataBufferInt
  * Image fully parsed out to a full int per each pixel per each channel.
  * NOT memory efficient, but avoids overflows.
  */
-class AveragingImage2
+class AveragingImageBIDirect
 private constructor(
-    override val width: Int,
-    override val height: Int,
+    width: Int,
+    height: Int,
     private val sums: IntArray = IntArray(width * height * 3),
-) : AveragingImage {
-    // Assume you always have at least one
-    override var numAdded = 1
-        private set
+) : BaseAveragingImage(width, height) {
 
-    override operator fun plusAssign(other: Frame) {
-        plusAssign(converter.get().convert(other))
-        other.close()
+
+    override suspend operator fun plusAssign(other: FrameWithPixelFormat) {
+        throw UnsupportedOperationException("This class works with BufferedImage.")
     }
 
     /**
      * Merge in another BufferedImage without converting the whole thing.
      */
-    override operator fun plusAssign(other: BufferedImage) {
+    override suspend operator fun plusAssign(other: BufferedImage) {
         numAdded++
         require(numAdded * 255 < Int.MAX_VALUE) { "Possible overflow in DecodedImage after $numAdded adds." }
         when (other.type) {
@@ -86,10 +82,8 @@ private constructor(
             override fun initialValue() = Java2DFrameConverter()
         }
 
-        internal fun blankOf(width: Int, height: Int): AveragingImage2 =
-            AveragingImage2(width = width, height = height).also {
-                it.numAdded = 0
-            }
+        internal fun blankOf(width: Int, height: Int): AveragingImage =
+            AveragingImageBIDirect(width = width, height = height)
 
     }
 }
