@@ -35,7 +35,31 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
         ffr.record(converter.convert(image), avutil.AV_PIX_FMT_ARGB)
         maxFrameNumber = index
     }
+}
 
+/** A new version of collectToFile that uses a lossless codec. */
+suspend fun Flow<BufferedImage>.collectToFileLossless(destinationFile: File, fps: Double = 60.0) {
+    var ffr: FFmpegFrameRecorder? = null
+    var maxFrameNumber = 0
+    val converter = Java2DFrameConverter()
+    println("Started collecting Sequence<BufferedImage> to '${destinationFile.absolutePath}'")
+    this.onCompletion {
+        println("Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
+        ffr?.close()
+    }.collectIndexed { index, image ->
+        if (ffr == null) {
+            ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
+                frameRate = fps
+                videoBitrate = 0 // max
+                videoQuality = 0.0 // max
+                setVideoOption("threads", "auto")
+                videoCodec = avcodec.AV_CODEC_ID_FFV1
+                start()
+            }
+        }
+        ffr.record(converter.convert(image), avutil.AV_PIX_FMT_ARGB)
+        maxFrameNumber = index
+    }
 }
 
 private const val FILTER_THUMB = "scale=128:-1"
