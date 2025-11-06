@@ -13,7 +13,6 @@ import kotlin.io.path.readLines
 import kotlin.io.path.walk
 import kotlin.io.path.writeText
 
-
 val outputVideoFile = File("average_thumb_10x.mp4")
 
 fun createScript(): String {
@@ -55,20 +54,21 @@ suspend fun main() {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 suspend fun smush(allSources: List<Source>) {
-
     outputVideoFile.delete()
     var averagingImage: AveragingImage? = null
     allSources.map { it.path.toFrames(isThumbnail = true, rotFilter = it.transpose) }
         .reduce { acc, flow ->
             arrayOf(acc, flow).asFlow().flattenConcat()
         }.transform { frame ->
-            if (averagingImage == null) {
-                averagingImage = AveragingImage.blankOf(frame.imageWidth, frame.imageHeight)
-                println("Averaging into an image: ${averagingImage!!.width} x ${averagingImage!!.height}")
-            }
-            averagingImage!! += frame
-            if (averagingImage!!.numAdded > 10) {
-                emit(averagingImage!!.toBufferedImage())
+            val localAveragingImage =
+                averagingImage ?: AveragingImage.blankOf(frame.imageWidth, frame.imageHeight).also {
+                    println("Averaging into an image: ${it.width} x ${it.height}")
+                    @Suppress("ASSIGNED_VALUE_IS_NEVER_READ")
+                    averagingImage = it
+                }
+            localAveragingImage += frame
+            if (localAveragingImage.numAdded > 10) {
+                emit(localAveragingImage.toBufferedImage())
             }
         }.collectToFile(outputVideoFile)
 }

@@ -25,6 +25,7 @@ private constructor(
         plusAssign(converter.get().convert(other))
         other.close()
     }
+
     /**
      * Merge in another BufferedImage without converting the whole thing.
      */
@@ -34,7 +35,7 @@ private constructor(
         when (other.type) {
             BufferedImage.TYPE_3BYTE_BGR,
             BufferedImage.TYPE_4BYTE_ABGR,
-            -> {
+                -> {
                 val data = (other.raster.dataBuffer!! as DataBufferByte).data!!
                 val stepSize = if (other.alphaRaster == null) 3 else 4
                 // ignore alpha channel 3 if it exists
@@ -49,7 +50,7 @@ private constructor(
             BufferedImage.TYPE_INT_RGB,
             BufferedImage.TYPE_INT_BGR,
             BufferedImage.TYPE_INT_ARGB,
-            -> {
+                -> {
                 val data = (other.raster.dataBuffer!! as DataBufferInt).data!!
                 // ignore alpha shift 24 if it exists
                 for (i in 0 until width * height) {
@@ -84,6 +85,7 @@ private constructor(
         val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
             override fun initialValue() = Java2DFrameConverter()
         }
+
         internal fun blankOf(width: Int, height: Int): AveragingImage2 =
             AveragingImage2(width = width, height = height).also {
                 it.numAdded = 0
