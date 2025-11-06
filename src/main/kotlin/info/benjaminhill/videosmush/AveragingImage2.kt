@@ -13,15 +13,15 @@ import java.awt.image.DataBufferInt
  */
 class AveragingImage2
 private constructor(
-    val width: Int,
-    val height: Int,
+    override val width: Int,
+    override val height: Int,
     private val sums: IntArray = IntArray(width * height * 3),
-) {
+) : AveragingImage {
     // Assume you always have at least one
-    var numAdded = 1
+    override var numAdded = 1
         private set
 
-    operator fun plusAssign(other: Frame) {
+    override operator fun plusAssign(other: Frame) {
         plusAssign(converter.get().convert(other))
         other.close()
     }
@@ -29,7 +29,7 @@ private constructor(
     /**
      * Merge in another BufferedImage without converting the whole thing.
      */
-    operator fun plusAssign(other: BufferedImage) {
+    override operator fun plusAssign(other: BufferedImage) {
         numAdded++
         require(numAdded * 255 < Int.MAX_VALUE) { "Possible overflow in DecodedImage after $numAdded adds." }
         when (other.type) {
@@ -66,7 +66,7 @@ private constructor(
 
 
     /** Produces an averaged image and resets all the buckets */
-    fun toBufferedImage(): BufferedImage {
+    override fun toBufferedImage(): BufferedImage {
         return BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).apply {
             val pixels = IntArray(width * height) { i ->
                 val r = (sums[i * 3 + 0] / numAdded) and 0xFF

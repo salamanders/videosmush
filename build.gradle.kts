@@ -20,6 +20,8 @@ dependencies {
 
     // https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+
+    implementation("org.jocl:jocl:2.0.4")
 }
 
 kotlin {

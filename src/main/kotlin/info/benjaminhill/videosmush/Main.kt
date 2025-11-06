@@ -39,10 +39,12 @@ suspend fun main() {
     smush(allSources, script)
 }
 
+private const val USE_GPU = true
+
 @OptIn(ExperimentalCoroutinesApi::class)
 suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
     outputVideoFile.delete()
-    var averagingImage: AveragingImage2? = null
+    var averagingImage: AveragingImage? = null
     var currentFrame = 0
 
     val ratios = script.entries.sortedBy { it.key }.let { sortedEntries ->
@@ -60,28 +62,36 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
         println(it)
     }
 
-    allSources.map {
-        it.path.toFrames(
-            isThumbnail = false,
-            rotFilter = "transpose=1",
-        )
-    }
-        .reduce { acc, flow ->
-            arrayOf(acc, flow).asFlow().flattenConcat()
-        }.transform { frame ->
-            val localAveragingImage =
-                averagingImage ?: AveragingImage2.blankOf(frame.imageWidth, frame.imageHeight).also {
-                    println("Averaging into an image: ${it.width} x ${it.height}")
-                    @Suppress("ASSIGNED_VALUE_IS_NEVER_READ")
-                    averagingImage = it
+    try {
+        allSources.map {
+            it.path.toFrames(
+                isThumbnail = false,
+                rotFilter = "transpose=1",
+            )
+        }
+            .reduce { acc, flow ->
+                arrayOf(acc, flow).asFlow().flattenConcat()
+            }.transform { frame ->
+                val localAveragingImage =
+                    averagingImage ?: if (USE_GPU) {
+                        AveragingImageGpu.blankOf(frame.imageWidth, frame.imageHeight)
+                    } else {
+                        AveragingImage2.blankOf(frame.imageWidth, frame.imageHeight)
+                    }.also {
+                        println("Averaging into an image: ${it.width} x ${it.height}")
+                        @Suppress("ASSIGNED_VALUE_IS_NEVER_READ")
+                        averagingImage = it
+                    }
+                localAveragingImage += frame
+                currentFrame++
+
+                val ratio = ratios.firstOrNull { currentFrame <= it.first }?.second ?: ratios.last().second
+
+                if (localAveragingImage.numAdded >= ratio) {
+                    emit(localAveragingImage.toBufferedImage())
                 }
-            localAveragingImage += frame
-            currentFrame++
-
-            val ratio = ratios.firstOrNull { currentFrame <= it.first }?.second ?: ratios.last().second
-
-            if (localAveragingImage.numAdded >= ratio) {
-                emit(localAveragingImage.toBufferedImage())
-            }
-        }.collectToFile(outputVideoFile)
+            }.collectToFile(outputVideoFile)
+    } finally {
+        (averagingImage as? AveragingImageGpu)?.release()
+    }
 }
