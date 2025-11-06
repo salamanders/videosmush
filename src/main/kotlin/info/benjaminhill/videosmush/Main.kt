@@ -12,25 +12,29 @@ import kotlin.io.path.readLines
 import kotlin.io.path.walk
 import kotlin.math.ceil
 
-val outputVideoFile = File("average_thumb_10x.mp4")
+val outputVideoFile = File("output.mp4")
 
 suspend fun main() {
     avutil.av_log_set_level(avutil.AV_LOG_QUIET)
 
-    val allSources = Path.of("inputs").walk()
+    // Determine the length of each source in frames
+    val allSources: List<Source> = Path.of("inputs").walk()
         .filter { it.toFile().isFile }
         .sorted()
         .map { path ->
             FFmpegFrameGrabber(path.toString()).use { grabber ->
                 grabber.start()
-                Source(path, grabber.lengthInVideoFrames)
+                Source(path, grabber.lengthInVideoFrames).also {
+                    grabber.stop()
+                }
             }
         }.toList()
 
-    val script = Path.of("script.csv").readLines()
+    // Scripts are "input frame number,target output frame number"
+    val script: Map<Int, Int> = Path.of("script.csv").readLines()
         .filter { it.isNotBlank() && !it.startsWith("#") }
         .map { it.split(",") }
-        .associate { (inputFrame, outputFrame) -> inputFrame.trim().toInt() to outputFrame.trim().toInt() }
+        .associate { (inputFrame, outputFrame) -> inputFrame.trim().toInt() to 60 * outputFrame.trim().toInt() }
 
     smush(allSources, script)
 }
@@ -38,7 +42,7 @@ suspend fun main() {
 @OptIn(ExperimentalCoroutinesApi::class)
 suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
     outputVideoFile.delete()
-    var averagingImage: AveragingImage? = null
+    var averagingImage: AveragingImage2? = null
     var currentFrame = 0
 
     val ratios = script.entries.sortedBy { it.key }.let { sortedEntries ->
@@ -52,15 +56,21 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
             lastOutputFrame = outputFrame
             inputFrame to ratio
         }
+    }.also {
+        println(it)
     }
 
-    allSources.map { it.path.toFrames(isThumbnail = true) }
+    allSources.map { it.path.toFrames(
+        isThumbnail = false,
+        rotFilter = "transpose=1",
+    ) }
         .reduce { acc, flow ->
             arrayOf(acc, flow).asFlow().flattenConcat()
         }.transform { frame ->
             val localAveragingImage =
-                averagingImage ?: AveragingImage.blankOf(frame.imageWidth, frame.imageHeight).also {
+                averagingImage ?: AveragingImage2.blankOf(frame.imageWidth, frame.imageHeight).also {
                     println("Averaging into an image: ${it.width} x ${it.height}")
+                    @Suppress("ASSIGNED_VALUE_IS_NEVER_READ")
                     averagingImage = it
                 }
             localAveragingImage += frame
@@ -70,7 +80,6 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
 
             if (localAveragingImage.numAdded >= ratio) {
                 emit(localAveragingImage.toBufferedImage())
-                averagingImage = null // Reset for the next batch
             }
         }.collectToFile(outputVideoFile)
 }

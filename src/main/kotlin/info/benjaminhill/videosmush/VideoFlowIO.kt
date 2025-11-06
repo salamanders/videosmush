@@ -28,7 +28,7 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
                 videoBitrate = 0 // max
                 videoQuality = 0.0 // max
                 setVideoOption("threads", "auto")
-                videoCodec = avcodec.AV_CODEC_ID_H264
+                videoCodec = avcodec.AV_CODEC_ID_AV1
                 start()
             }
         }
@@ -43,7 +43,7 @@ private const val FILTER_THUMB = "scale=128:-1"
 /** Compact way of generating a flow of images */
 fun Path.toFrames(
     isThumbnail: Boolean,
-    rotFilter: String,
+    rotFilter: String?,
     maxFrames: Long = Long.MAX_VALUE - 1
 ): Flow<Frame> {
     require(Files.isReadable(this)) { "Unable to read file: $this" }
@@ -56,11 +56,16 @@ fun Path.toFrames(
     return flow<Frame> {
         while (numFrames.get() < maxFrames) {
             val nextFrame = grabber!!.grabImage() ?: break
-            if (numFrames.incrementAndGet() % 1_000L == 0L) {
+            if (numFrames.incrementAndGet() % 5_000L == 0L) {
                 println(" ${sourceFile.name} ${numFrames.get()}")
             }
-            videoFilter!!.push(nextFrame)
-            emit(videoFilter!!.pull().clone())
+            if(videoFilter != null) {
+                videoFilter!!.push(nextFrame)
+                emit(videoFilter!!.pull().clone())
+            } else {
+                emit(nextFrame.clone())
+            }
+
         }
     }.onStart {
         avutil.av_log_set_level(avutil.AV_LOG_QUIET)
@@ -76,9 +81,11 @@ fun Path.toFrames(
                 }
             ).joinToString(",")
             println("  Filter: `$videoFilterString` on ${gr.imageWidth}, ${gr.imageHeight}")
-            videoFilter = FFmpegFrameFilter(videoFilterString, gr.imageWidth, gr.imageHeight).also { vf ->
-                vf.pixelFormat = gr.pixelFormat
-                vf.start()
+            if(videoFilterString.isNotBlank()) {
+                videoFilter = FFmpegFrameFilter(videoFilterString, gr.imageWidth, gr.imageHeight).also { vf ->
+                    vf.pixelFormat = gr.pixelFormat
+                    vf.start()
+                }
             }
         }
     }.onCompletion {
@@ -94,5 +101,6 @@ fun Path.toFrames(
     }
 }
 
+@Suppress("unused")
 @OptIn(ExperimentalCoroutinesApi::class)
 fun <T> concatenate(vararg flows: Flow<T>) = flows.asFlow().flattenConcat()
