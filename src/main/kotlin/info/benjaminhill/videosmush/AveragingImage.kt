@@ -1,5 +1,8 @@
 package info.benjaminhill.videosmush
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameConverter
 import org.bytedeco.javacv.Java2DFrameConverter
@@ -14,76 +17,77 @@ import java.awt.image.DataBufferInt
  */
 class AveragingImage
 private constructor(
-     val width: Int,
-     val height: Int,
+    val width: Int,
+    val height: Int,
     private val red: IntArray = IntArray(width * height),
     private val green: IntArray = IntArray(width * height),
     private val blue: IntArray = IntArray(width * height),
 ) {
-    // Assume you always have at least one
-    var numAdded = 1
+    var numAdded: Int = 0
         private set
 
-    operator fun plusAssign(other: Frame) {
+    suspend operator fun plusAssign(other: Frame) {
         plusAssign(converter.get().convert(other))
         other.close()
     }
+
     /**
      * Merge in another BufferedImage without converting the whole thing.
      */
-    operator fun plusAssign(other: BufferedImage):Unit  = FastRunner().use { fr ->
+    suspend operator fun plusAssign(other: BufferedImage) {
         numAdded++
         require(numAdded * 255 < Int.MAX_VALUE) { "Possible overflow in DecodedImage after $numAdded adds." }
-        when (other.type) {
-            BufferedImage.TYPE_3BYTE_BGR,
-            BufferedImage.TYPE_4BYTE_ABGR,
-            -> {
-                val data = (other.raster.dataBuffer!! as DataBufferByte).data!!
-                val stepSize = if (other.alphaRaster == null) 3 else 4
-                // ignore alpha channel 3 if it exists
+        withContext(Dispatchers.Default) {
+            when (other.type) {
+                BufferedImage.TYPE_3BYTE_BGR,
+                BufferedImage.TYPE_4BYTE_ABGR,
+                    -> {
+                    val data = (other.raster.dataBuffer!! as DataBufferByte).data!!
+                    val stepSize = if (other.alphaRaster == null) 3 else 4
+                    // ignore alpha channel 3 if it exists
 
-                fr.prun {
-                    for (i in red.indices) {
-                        red[i] += (data[i * stepSize + 2].toInt() and 0xFF)
+                    launch {
+                        for (i in red.indices) {
+                            red[i] += (data[i * stepSize + 2].toInt() and 0xFF)
+                        }
+                    }
+                    launch {
+                        for (i in green.indices) {
+                            green[i] += (data[i * stepSize + 1].toInt() and 0xFF)
+                        }
+                    }
+                    launch {
+                        for (i in blue.indices) {
+                            blue[i] += (data[i * stepSize + 0].toInt() and 0xFF)
+                        }
                     }
                 }
-                fr.prun {
-                    for (i in green.indices) {
-                        green[i] += (data[i * stepSize + 1].toInt() and 0xFF)
+
+                BufferedImage.TYPE_INT_RGB,
+                BufferedImage.TYPE_INT_BGR,
+                BufferedImage.TYPE_INT_ARGB,
+                    -> {
+                    val data = (other.raster.dataBuffer!! as DataBufferInt).data!!
+                    // ignore alpha shift 24 if it exists
+                    launch {
+                        for (i in red.indices) {
+                            red[i] += (data[i] shr 16 and 0xFF)
+                        }
+                    }
+                    launch {
+                        for (i in green.indices) {
+                            green[i] += (data[i] shr 8 and 0xFF)
+                        }
+                    }
+                    launch {
+                        for (i in blue.indices) {
+                            blue[i] += (data[i] shr 0 and 0xFF)
+                        }
                     }
                 }
-                fr.prun {
-                    for (i in blue.indices) {
-                        blue[i] += (data[i * stepSize + 0].toInt() and 0xFF)
-                    }
-                }
+
+                else -> throw IllegalArgumentException("Bad image type: $other.type")
             }
-
-
-            BufferedImage.TYPE_INT_RGB,
-            BufferedImage.TYPE_INT_BGR,
-            BufferedImage.TYPE_INT_ARGB,
-            -> {
-                val data = (other.raster.dataBuffer!! as DataBufferInt).data!!
-                // ignore alpha shift 24 if it exists
-                fr.prun {
-                    for (i in red.indices) {
-                        red[i] += (data[i] shr 16 and 0xFF)
-                    }
-                }
-                fr.prun {
-                    for (i in green.indices) {
-                        green[i] += (data[i] shr 8 and 0xFF)
-                    }
-                }
-                fr.prun {
-                    for (i in blue.indices) {
-                        blue[i] += (data[i] shr 0 and 0xFF)
-                    }
-                }
-            }
-
-            else -> throw IllegalArgumentException("Bad image type: $other.type")
         }
     }
 
@@ -106,6 +110,7 @@ private constructor(
         val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
             override fun initialValue() = Java2DFrameConverter()
         }
+
         internal fun blankOf(width: Int, height: Int): AveragingImage =
             AveragingImage(width = width, height = height).also {
                 it.numAdded = 0

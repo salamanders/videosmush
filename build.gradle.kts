@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "1.9.22"
+    kotlin("jvm") version "2.2.21"
     application
 }
 
@@ -16,10 +16,10 @@ repositories {
 
 
 dependencies {
-    implementation("org.bytedeco:javacv-platform:1.5.10-SNAPSHOT")
+    implementation("org.bytedeco:javacv-platform:1.5.12")
 
     // https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }
 
 kotlin {

@@ -55,10 +55,14 @@ fun Path.toFrames(
             }
         }
     }.onCompletion {
-        videoFilter!!.stop()
-        videoFilter!!.close()
-        grabber!!.stop()
-        grabber!!.close()
+        videoFilter?.apply {
+            stop()
+            close()
+        } ?: System.err.println("Unable to stop video filter: $this")
+        grabber?.apply {
+            stop()
+            close()
+        } ?: System.err.println("Unable to stop grabber: $this")
         println("Finished reading from: $sourceFile, ${numFrames.get()} frames.")
     }
 }

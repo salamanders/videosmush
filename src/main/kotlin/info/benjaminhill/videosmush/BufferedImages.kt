@@ -18,22 +18,22 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
     val converter = Java2DFrameConverter()
     println("Started collecting Sequence<BufferedImage> to '${destinationFile.absolutePath}'")
     this.onCompletion {
-            println("Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
-            ffr?.close()
-        }.collectIndexed { index, image ->
-            if (ffr == null) {
-                ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
-                    frameRate = fps
-                    videoBitrate = 0 // max
-                    videoQuality = 0.0 // max
-                    setVideoOption("threads", "auto")
-                    videoCodec = avcodec.AV_CODEC_ID_H264
-                    start()
-                }
+        println("Finished writing to '${destinationFile.absolutePath}' ($maxFrameNumber frames)")
+        ffr?.close()
+    }.collectIndexed { index, image ->
+        if (ffr == null) {
+            ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
+                frameRate = fps
+                videoBitrate = 0 // max
+                videoQuality = 0.0 // max
+                setVideoOption("threads", "auto")
+                videoCodec = avcodec.AV_CODEC_ID_H264
+                start()
             }
-            ffr!!.record(converter.convert(image), avutil.AV_PIX_FMT_ARGB)
-            maxFrameNumber = index
         }
+        ffr.record(converter.convert(image), avutil.AV_PIX_FMT_ARGB)
+        maxFrameNumber = index
+    }
 
 }
 
