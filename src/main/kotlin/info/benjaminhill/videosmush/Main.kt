@@ -40,19 +40,20 @@ suspend fun main() {
         .associate { (inputFrame, outputFrame) -> inputFrame.trim().toInt() to 60 * outputFrame.trim().toInt() }
 
     val implementations = mapOf(
-        "gpu" to { w: Int, h: Int -> AveragingImageGPU.blankOf(w, h) },
-        // "bidirect" to { w: Int, h: Int -> AveragingImageBIDirect.blankOf(w, h) },
-        // "rgb" to { w: Int, h: Int -> AveragingImageRGB.blankOf(w, h) },
-        // "frames" to { w: Int, h: Int -> AveragingImageFrames.blankOf(w, h) }
+        //"bidirect" to { w: Int, h: Int -> AveragingImageBIDirect.blankOf(w, h) },
+        //"frames" to { w: Int, h: Int -> AveragingImageFrames.blankOf(w, h) },
+        //"gpu" to { w: Int, h: Int -> AveragingImageGPU.blankOf(w, h) },
+        // "ocv" to { w: Int, h: Int -> AveragingImageOCV.blankOf(w, h) },
+        "rgb" to { w: Int, h: Int -> AveragingImageRGB.blankOf(w, h) },
     )
 
     for ((name, factory) in implementations) {
         try {
-            val outputFile = File("output/output_$name.mp4")
+            val outputFile = File("output/output_$name.mkv")
             val duration = measureTime {
                 smush(allSources, script, factory, outputFile)
             }
-            println("Implementation '$name' took ${duration.inWholeMinutes} minutes")
+            println("Implementation '$name' took $duration")
         } catch (t: Throwable) {
             System.err.println(t)
             System.err.println(t.stackTraceToString())

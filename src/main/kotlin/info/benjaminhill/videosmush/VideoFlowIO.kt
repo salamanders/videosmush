@@ -2,17 +2,9 @@ package info.benjaminhill.videosmush
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
-import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
-import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P
-import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P10
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P10LE
-import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV422P10LE
-import org.bytedeco.javacv.FFmpegFrameFilter
-import org.bytedeco.javacv.FFmpegFrameGrabber
-import org.bytedeco.javacv.FFmpegFrameRecorder
-import org.bytedeco.javacv.FFmpegLogCallback
-import org.bytedeco.javacv.Java2DFrameConverter
+import org.bytedeco.javacv.*
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
@@ -39,17 +31,52 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
             FFmpegLogCallback.set()
             ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
                 frameRate = fps
+                // NOTE: Output file names matter!
+
                 // videoBitrate = 0 // max
                 // videoQuality = 0.0 // max
-                setVideoOption("tag", "hvc1")
-                format = "mp4"
-                videoCodec = avcodec.AV_CODEC_ID_H264 // AV_CODEC_ID_H265
-                pixelFormat = AV_PIX_FMT_YUV420P // AV_PIX_FMT_YUV420P10LE //AV_PIX_FMT_YUV420P
-                setVideoOption("crf", "16")
-                setVideoOption("preset", "veryslow")
-                setVideoOption("profile", "high")
-                setVideoOption("tune", "film")
+                //setVideoOption("tag", "hvc1")
+                //format = "mp4"
+                // videoCodec = avcodec.AV_CODEC_ID_H265 // Use HEVC
+                //setVideoCodecName("libx265")
+                //pixelFormat = AV_PIX_FMT_YUV420P10LE // Use 10-bit pixel format
+                //setVideoOption("crf", "16") // 16 is already extremely high quality for H.265
+                //setVideoOption("preset", "veryslow")
+                //setVideoOption("profile", "main10") // Specify the main 10-bit profile
+
+                // This works.  Lossless.
+//                format = "mkv" // Use Matroska container
+//                videoCodec = avcodec.AV_CODEC_ID_FFV1 // FFV1 lossless codec
+//                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit
+
+                // "tune" is less critical now, but "film" is fine.
+                //setVideoOption("tune", "film")
+                // etVideoOption("threads", "auto")
+                // --- Key Changes Here ---
+//                format = "mp4" // MP4 is correct for H.265
+//                setVideoOption("tag", "hvc1") // Good for Apple compatibility
+//                setVideoCodecName("libx265") // Specify encoder by name
+//                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit
+//                setVideoOption("crf", "16")
+//                setVideoOption("preset", "veryslow")
+//                setVideoOption("profile", "main10") // 10-bit profile
+//                // --- End Changes ---
+
+                // setVideoOption("tune", "film")
+                // setVideoOption("threads", "auto")
+                // start()
+
+                // --- H.265 10-bit in MKV Container ---
+                format = "mkv"                       // Set container to Matroska
+                setVideoCodecName("libaom-av1")
+                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit is fully supported
+                setVideoOption("crf", "10")          // Quality (0-63, lower is better). 20 is very high.
+                setVideoOption("tile-columns", "3")
+                setVideoOption("tile-rows", "2")
+                setVideoOption("row-mt", "1")
+                // --- End Settings ---
                 setVideoOption("threads", "auto")
+                require(destinationFile.extension == format)
                 start()
             }
         }

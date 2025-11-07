@@ -19,27 +19,17 @@ The project is built using Gradle.
 
 ### Building
 
-To build the project, run the following command:
+To build and the project, run the following command:
 
 ```bash
 ./gradlew build
+./gradlew run
 ```
 
 ### Running
 
-The main entry point for the application is the `main` function in
-`src/main/kotlin/info/benjaminhill/videosmush/Main.kt`. To run the application, you can use the following Gradle
-command:
-
-```bash
-./gradlew run
-```
-
-**Note:** The `build.gradle.kts` file currently specifies `info.benjaminhill.videosmush.ScriptedLapseKt` as the main
-class, which appears to be incorrect. The `run` command above might fail. If it does, you will need to update the
-`mainClass` in `build.gradle.kts` to `info.benjaminhill.videosmush.MainKt`.
-
-The application requires a `script.csv` file in the project root directory and video files in the `inputs` directory.
+The application requires a `script.csv` file in the project root directory and 1 or more video files in the `inputs`
+directory.
 
 ## Development Conventions
 
