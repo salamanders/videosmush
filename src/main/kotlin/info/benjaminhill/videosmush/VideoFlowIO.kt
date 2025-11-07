@@ -5,9 +5,13 @@ import kotlinx.coroutines.flow.*
 import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P
+import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P10
+import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P10LE
+import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV422P10LE
 import org.bytedeco.javacv.FFmpegFrameFilter
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.FFmpegFrameRecorder
+import org.bytedeco.javacv.FFmpegLogCallback
 import org.bytedeco.javacv.Java2DFrameConverter
 import java.awt.image.BufferedImage
 import java.io.File
@@ -29,16 +33,23 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
         println("Closed")
     }.collectIndexed { index, image ->
         if (ffr == null) {
+            require(image.width % 2 == 0 && image.height % 2 == 0) {
+                "Video dimensions must be even for YUV420P pixel format."
+            }
+            FFmpegLogCallback.set()
             ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
                 frameRate = fps
-                videoBitrate = 0 // max
-                videoQuality = 0.0 // max
-                setVideoOption("threads", "auto")
+                // videoBitrate = 0 // max
+                // videoQuality = 0.0 // max
+                setVideoOption("tag", "hvc1")
                 format = "mp4"
-                videoCodec = avcodec.AV_CODEC_ID_H265
-                pixelFormat = AV_PIX_FMT_YUV420P
-                setVideoOption("crf", "0")
-                setVideoOption("preset", "slow")
+                videoCodec = avcodec.AV_CODEC_ID_H264 // AV_CODEC_ID_H265
+                pixelFormat = AV_PIX_FMT_YUV420P // AV_PIX_FMT_YUV420P10LE //AV_PIX_FMT_YUV420P
+                setVideoOption("crf", "16")
+                setVideoOption("preset", "veryslow")
+                setVideoOption("profile", "high")
+                setVideoOption("tune", "film")
+                setVideoOption("threads", "auto")
                 start()
             }
         }
@@ -68,7 +79,11 @@ fun Path.toFrames(
             }
             if (videoFilter != null) {
                 videoFilter!!.push(nextFrame)
-                emit(FrameWithPixelFormat.ofFfmpeg(videoFilter!!.pull().clone(), grabber!!.pixelFormat))
+                // The frame from pull() must be closed after use to prevent memory leaks.
+                videoFilter!!.pull()?.let { filteredFrame ->
+                    emit(FrameWithPixelFormat.ofFfmpeg(filteredFrame.clone(), grabber!!.pixelFormat))
+                    filteredFrame.close()
+                }
             } else {
                 emit(FrameWithPixelFormat.ofFfmpeg(nextFrame.clone(), grabber!!.pixelFormat))
             }
