@@ -1,5 +1,8 @@
-package info.benjaminhill.videosmush
+package info.benjaminhill.videosmush.old
 
+import info.benjaminhill.videosmush.AveragingImage
+import info.benjaminhill.videosmush.BaseAveragingImage
+import info.benjaminhill.videosmush.FrameWithPixelFormat
 import org.jocl.*
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte

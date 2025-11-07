@@ -1,11 +1,21 @@
 # videosmush
 
-Timelapse of mp4 using adaptive frame blending
+Time-lapse of multiple videos using scripted frame blending to adjust the speedup
 
-Given an input.mp4 source video which is more than 60 seconds taken from a fixed camera on a tripod, smush down the
-video to a 60-second timelapse by merging the frames that have very little difference.  
-Keep at least 30 output frames with a single source frame.
+1. Put ordered video clips into the "input" folder.
+2. Create a "script.csv"
+3. Run and wait.
 
-## TODO
+The script is a series of lines like
 
-* http://bytedeco.org/news/2014/12/23/third-release/
+```csv
+213220,4
+217366,14
+```
+
+which is "frame 213220 should show up at 00:04 seconds into the video (which is a huge speedup),
+frame 217366 should be at 00:14 seconds (which is much less of a speedup)
+etc."
+
+The app will calculate the right amount of frames to blend together to hit the target.
+It is slow to avoid "binning" in the blended frames.

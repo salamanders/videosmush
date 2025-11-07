@@ -1,5 +1,8 @@
-package info.benjaminhill.videosmush
+package info.benjaminhill.videosmush.old
 
+import info.benjaminhill.videosmush.AveragingImage
+import info.benjaminhill.videosmush.BaseAveragingImage
+import info.benjaminhill.videosmush.FrameWithPixelFormat
 import org.bytedeco.javacv.Java2DFrameConverter
 import org.bytedeco.javacv.OpenCVFrameConverter
 import org.bytedeco.opencv.global.opencv_core.CV_32FC3

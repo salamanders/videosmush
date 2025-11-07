@@ -110,6 +110,7 @@ suspend fun smush(
                 val ratio = ratios.firstOrNull { currentFrame <= it.first }?.second ?: ratios.last().second
                 if (ratio != previousRatio) {
                     println("RATIO: $ratio")
+                    @SuppressWarnings("unused")
                     previousRatio = ratio
                 }
                 if (localAveragingImage.numAdded >= ratio) {

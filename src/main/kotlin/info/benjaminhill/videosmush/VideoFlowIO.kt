@@ -31,52 +31,19 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
             FFmpegLogCallback.set()
             ffr = FFmpegFrameRecorder(destinationFile.absolutePath, image.width, image.height, 0).apply {
                 frameRate = fps
-                // NOTE: Output file names matter!
-
-                // videoBitrate = 0 // max
-                // videoQuality = 0.0 // max
-                //setVideoOption("tag", "hvc1")
-                //format = "mp4"
-                // videoCodec = avcodec.AV_CODEC_ID_H265 // Use HEVC
-                //setVideoCodecName("libx265")
-                //pixelFormat = AV_PIX_FMT_YUV420P10LE // Use 10-bit pixel format
-                //setVideoOption("crf", "16") // 16 is already extremely high quality for H.265
-                //setVideoOption("preset", "veryslow")
-                //setVideoOption("profile", "main10") // Specify the main 10-bit profile
-
-                // This works.  Lossless.
-//                format = "mkv" // Use Matroska container
-//                videoCodec = avcodec.AV_CODEC_ID_FFV1 // FFV1 lossless codec
-//                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit
-
-                // "tune" is less critical now, but "film" is fine.
-                //setVideoOption("tune", "film")
-                // etVideoOption("threads", "auto")
-                // --- Key Changes Here ---
-//                format = "mp4" // MP4 is correct for H.265
-//                setVideoOption("tag", "hvc1") // Good for Apple compatibility
-//                setVideoCodecName("libx265") // Specify encoder by name
-//                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit
-//                setVideoOption("crf", "16")
-//                setVideoOption("preset", "veryslow")
-//                setVideoOption("profile", "main10") // 10-bit profile
-//                // --- End Changes ---
-
-                // setVideoOption("tune", "film")
-                // setVideoOption("threads", "auto")
-                // start()
-
                 // --- H.265 10-bit in MKV Container ---
-                format = "mkv"                       // Set container to Matroska
+                format = "mkv"  // Set container to Matroska
+                require(destinationFile.extension == format) { "Output extension must match the format: $format" }
                 setVideoCodecName("libaom-av1")
-                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit is fully supported
-                setVideoOption("crf", "10")          // Quality (0-63, lower is better). 20 is very high.
+                pixelFormat = AV_PIX_FMT_YUV420P10LE // 10-bit
+                setVideoOption("crf", "10") // Quality (0-63, lower is better). 20 is very high.
+                // Enable some parallel processing in the output encoding
                 setVideoOption("tile-columns", "3")
                 setVideoOption("tile-rows", "2")
                 setVideoOption("row-mt", "1")
+                // Don't set num-cpu!
                 // --- End Settings ---
                 setVideoOption("threads", "auto")
-                require(destinationFile.extension == format)
                 start()
             }
         }
