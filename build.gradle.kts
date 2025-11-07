@@ -29,5 +29,5 @@ kotlin {
 }
 
 application {
-    mainClass.set("info.benjaminhill.videosmush.ScriptedLapseKt")
+    mainClass.set("info.benjaminhill.videosmush.MainKt")
 }

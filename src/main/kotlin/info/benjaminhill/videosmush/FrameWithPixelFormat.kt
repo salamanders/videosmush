@@ -12,8 +12,8 @@ enum class PixelFormat(val ffmpeg: Int, val bufferedImage: Int) {
     INT_BGR(avutil.AV_PIX_FMT_0BGR, BufferedImage.TYPE_INT_BGR);
 
     companion object {
-        fun ofFfmpeg(ffmpeg: Int): PixelFormat = PixelFormat.entries.first { it.ffmpeg == ffmpeg }
-        fun ofBufferedImage(bi: Int): PixelFormat = PixelFormat.entries.first { it.bufferedImage == bi }
+        fun ofFfmpeg(avutilAvPixFmt: Int): PixelFormat = PixelFormat.entries.first { it.ffmpeg == avutilAvPixFmt }
+        fun ofBufferedImage(biType: Int): PixelFormat = PixelFormat.entries.first { it.bufferedImage == biType }
     }
 }
 

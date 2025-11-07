@@ -1,5 +1,7 @@
 package info.benjaminhill.videosmush
 
+import org.bytedeco.javacv.FrameConverter
+import org.bytedeco.javacv.Java2DFrameConverter
 import java.awt.image.BufferedImage
 
 /**
@@ -10,7 +12,6 @@ interface AveragingImage {
     val height: Int
     var numAdded: Int
     suspend operator fun plusAssign(other: FrameWithPixelFormat)
-    suspend operator fun plusAssign(other: BufferedImage)
     fun toBufferedImage(): BufferedImage
     fun close()
 }
@@ -24,5 +25,9 @@ abstract class BaseAveragingImage(
 
     override fun close() {
         // empty by default
+    }
+
+    protected val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
+        override fun initialValue() = Java2DFrameConverter()
     }
 }

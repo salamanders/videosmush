@@ -257,5 +257,4 @@ $RECYCLE.BIN/
 /.gradle/*
 /target/classes/META-INF/videosmush.kotlin_module
 /input/*
-/inputs/*
-output.mp4
+/output/*

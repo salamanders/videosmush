@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
 
-class AveragingImageGpu private constructor(
+class AveragingImageGPU private constructor(
     override val width: Int,
     override val height: Int,
 ) : BaseAveragingImage(width, height) {
@@ -59,7 +59,7 @@ class AveragingImageGpu private constructor(
         val device = devices[deviceIndex]
 
         context = CL.clCreateContext(contextProperties, 1, arrayOf(device), null, null, null)
-        commandQueue = CL.clCreateCommandQueueWithProperties(context, device, null, null)
+        commandQueue = CL.clCreateCommandQueue(context, device, 0, null)
 
         val program = CL.clCreateProgramWithSource(context, 1, arrayOf(programSource), null, null)
         CL.clBuildProgram(program, 0, null, null, null, null)
@@ -72,16 +72,14 @@ class AveragingImageGpu private constructor(
     }
 
     override suspend operator fun plusAssign(other: FrameWithPixelFormat) {
-        plusAssign(AveragingImageBIDirect.converter.get().convert(other.frame))
+        val bi = converter.get().convert(other.frame)
         other.frame.close()
-    }
 
-    override suspend operator fun plusAssign(other: BufferedImage) {
         numAdded++
-        when (other.type) {
+        when (bi.type) {
             BufferedImage.TYPE_3BYTE_BGR, BufferedImage.TYPE_4BYTE_ABGR -> {
-                val data = (other.raster.dataBuffer as DataBufferByte).data
-                val stepSize = if (other.alphaRaster == null) 3 else 4
+                val data = (bi.raster.dataBuffer as DataBufferByte).data
+                val stepSize = if (bi.alphaRaster == null) 3 else 4
                 val dataMem = CL.clCreateBuffer(
                     context,
                     CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR,
@@ -109,7 +107,7 @@ class AveragingImageGpu private constructor(
             }
 
             BufferedImage.TYPE_INT_RGB, BufferedImage.TYPE_INT_BGR, BufferedImage.TYPE_INT_ARGB -> {
-                val data = (other.raster.dataBuffer as DataBufferInt).data
+                val data = (bi.raster.dataBuffer as DataBufferInt).data
                 val dataMem = CL.clCreateBuffer(
                     context,
                     CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR,
@@ -135,7 +133,7 @@ class AveragingImageGpu private constructor(
                 CL.clReleaseMemObject(dataMem)
             }
 
-            else -> throw IllegalArgumentException("Unsupported image type: ${other.type}")
+            else -> throw IllegalArgumentException("Unsupported image type: ${bi.type}")
         }
     }
 
@@ -187,6 +185,6 @@ class AveragingImageGpu private constructor(
     }
 
     companion object {
-        fun blankOf(width: Int, height: Int): AveragingImage = AveragingImageGpu(width, height)
+        fun blankOf(width: Int, height: Int): AveragingImage = AveragingImageGPU(width, height)
     }
 }

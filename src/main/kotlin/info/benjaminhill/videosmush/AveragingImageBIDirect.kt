@@ -1,7 +1,5 @@
 package info.benjaminhill.videosmush
 
-import org.bytedeco.javacv.FrameConverter
-import org.bytedeco.javacv.Java2DFrameConverter
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
@@ -17,23 +15,21 @@ private constructor(
     private val sums: IntArray = IntArray(width * height * 3),
 ) : BaseAveragingImage(width, height) {
 
-
-    override suspend operator fun plusAssign(other: FrameWithPixelFormat) {
-        throw UnsupportedOperationException("This class works with BufferedImage.")
-    }
-
     /**
      * Merge in another BufferedImage without converting the whole thing.
      */
-    override suspend operator fun plusAssign(other: BufferedImage) {
+    override suspend operator fun plusAssign(other: FrameWithPixelFormat) {
+        val bi = converter.get().convert(other.frame)
+        other.frame.close()
+
         numAdded++
         require(numAdded * 255 < Int.MAX_VALUE) { "Possible overflow in DecodedImage after $numAdded adds." }
-        when (other.type) {
+        when (bi.type) {
             BufferedImage.TYPE_3BYTE_BGR,
             BufferedImage.TYPE_4BYTE_ABGR,
                 -> {
-                val data = (other.raster.dataBuffer!! as DataBufferByte).data!!
-                val stepSize = if (other.alphaRaster == null) 3 else 4
+                val data = (bi.raster.dataBuffer!! as DataBufferByte).data!!
+                val stepSize = if (bi.alphaRaster == null) 3 else 4
                 // ignore alpha channel 3 if it exists
                 for (i in 0 until width * height) {
                     sums[i * 3 + 0] += (data[i * stepSize + 2].toInt() and 0xFF)
@@ -47,7 +43,7 @@ private constructor(
             BufferedImage.TYPE_INT_BGR,
             BufferedImage.TYPE_INT_ARGB,
                 -> {
-                val data = (other.raster.dataBuffer!! as DataBufferInt).data!!
+                val data = (bi.raster.dataBuffer!! as DataBufferInt).data!!
                 // ignore alpha shift 24 if it exists
                 for (i in 0 until width * height) {
                     sums[i * 3 + 0] += (data[i] shr 16 and 0xFF)
@@ -59,7 +55,6 @@ private constructor(
             else -> throw IllegalArgumentException("Bad image type: $other.type")
         }
     }
-
 
     /** Produces an averaged image and resets all the buckets */
     override fun toBufferedImage(): BufferedImage {
@@ -78,12 +73,7 @@ private constructor(
     }
 
     companion object {
-        val converter = object : ThreadLocal<FrameConverter<BufferedImage>>() {
-            override fun initialValue() = Java2DFrameConverter()
-        }
-
         internal fun blankOf(width: Int, height: Int): AveragingImage =
             AveragingImageBIDirect(width = width, height = height)
-
     }
 }

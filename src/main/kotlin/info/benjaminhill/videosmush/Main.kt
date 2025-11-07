@@ -12,15 +12,14 @@ import kotlin.io.path.name
 import kotlin.io.path.readLines
 import kotlin.io.path.walk
 import kotlin.math.ceil
+import kotlin.time.measureTime
 
-
-val outputVideoFile = File("output.mp4")
 
 suspend fun main() {
     avutil.av_log_set_level(avutil.AV_LOG_QUIET)
 
     // Determine the length of each source in frames
-    val allSources: List<Source> = Path.of("inputs").walk()
+    val allSources: List<Source> = Path.of("input").walk()
         .filter { it.toFile().isFile && !it.name.startsWith(".") }
         .sorted()
         .map { path ->
@@ -32,18 +31,43 @@ suspend fun main() {
             }
         }.toList()
 
+    println("Total input frames: ${allSources.sumOf { it.frames }}")
+
     // Scripts are "input frame number,target output frame number"
     val script: Map<Int, Int> = Path.of("script.csv").readLines()
         .filter { it.isNotBlank() && !it.startsWith("#") }
         .map { it.split(",") }
         .associate { (inputFrame, outputFrame) -> inputFrame.trim().toInt() to 60 * outputFrame.trim().toInt() }
 
-    smush(allSources, script)
+    val implementations = mapOf(
+        "gpu" to { w: Int, h: Int -> AveragingImageGPU.blankOf(w, h) },
+        // "bidirect" to { w: Int, h: Int -> AveragingImageBIDirect.blankOf(w, h) },
+        // "rgb" to { w: Int, h: Int -> AveragingImageRGB.blankOf(w, h) },
+        // "frames" to { w: Int, h: Int -> AveragingImageFrames.blankOf(w, h) }
+    )
+
+    for ((name, factory) in implementations) {
+        try {
+            val outputFile = File("output/output_$name.mp4")
+            val duration = measureTime {
+                smush(allSources, script, factory, outputFile)
+            }
+            println("Implementation '$name' took ${duration.inWholeMinutes} minutes")
+        } catch (t: Throwable) {
+            System.err.println(t)
+            System.err.println(t.stackTraceToString())
+        }
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
-    outputVideoFile.delete()
+suspend fun smush(
+    allSources: List<Source>,
+    script: Map<Int, Int>,
+    averagingImageFactory: (Int, Int) -> AveragingImage,
+    outputFile: File
+) {
+    outputFile.delete()
     var averagingImage: AveragingImage? = null
     var currentFrame = 0
 
@@ -75,9 +99,8 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
             }.transform { frameWithPixelFormat ->
                 val frame = frameWithPixelFormat.frame
                 val localAveragingImage: AveragingImage =
-                    averagingImage ?: AveragingImageRGB.blankOf(frame.imageWidth, frame.imageHeight).also {
+                    averagingImage ?: averagingImageFactory(frame.imageWidth, frame.imageHeight).also {
                         println("Averaging into an image: ${it.width} x ${it.height}")
-                        @Suppress("ASSIGNED_VALUE_IS_NEVER_READ")
                         averagingImage = it
                     }
                 localAveragingImage += frameWithPixelFormat
@@ -91,7 +114,7 @@ suspend fun smush(allSources: List<Source>, script: Map<Int, Int>) {
                 if (localAveragingImage.numAdded >= ratio) {
                     emit(localAveragingImage.toBufferedImage())
                 }
-            }.collectToFile(outputVideoFile)
+            }.collectToFile(outputFile)
     } finally {
         averagingImage?.close()
     }

@@ -40,10 +40,6 @@ private constructor(
         other.frame.close()
     }
 
-    override suspend operator fun plusAssign(other: BufferedImage) {
-        throw UnsupportedOperationException("This class works with Frames directly.")
-    }
-
     override fun toBufferedImage(): BufferedImage {
         return BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).apply {
             val pixels = IntArray(width * height) { i ->

@@ -4,6 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
+import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P
 import org.bytedeco.javacv.FFmpegFrameFilter
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.FFmpegFrameRecorder
@@ -17,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong
 private const val FILTER_THUMB = "scale=128:-1"
 
 /** Need to get fancy with the thread local objects to keep from crashing (I think.) */
-suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double = 60.0, isLossless: Boolean = false) {
+suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double = 60.0) {
     var ffr: FFmpegFrameRecorder? = null
     var maxFrameNumber = 0
     val converter = Java2DFrameConverter()
@@ -33,7 +34,11 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
                 videoBitrate = 0 // max
                 videoQuality = 0.0 // max
                 setVideoOption("threads", "auto")
-                videoCodec = if (isLossless) avcodec.AV_CODEC_ID_FFV1 else avcodec.AV_CODEC_ID_AV1
+                format = "mp4"
+                videoCodec = avcodec.AV_CODEC_ID_H265
+                pixelFormat = AV_PIX_FMT_YUV420P
+                setVideoOption("crf", "0")
+                setVideoOption("preset", "slow")
                 start()
             }
         }
@@ -59,7 +64,7 @@ fun Path.toFrames(
         while (numFrames.get() < maxFrames) {
             val nextFrame = grabber!!.grabImage() ?: break
             if (numFrames.incrementAndGet() % 5_000L == 0L) {
-                println(" ${sourceFile.name} ${numFrames.get()}")
+                println(" in:${sourceFile.name} ${numFrames.get()}")
             }
             if (videoFilter != null) {
                 videoFilter!!.push(nextFrame)
