@@ -22,6 +22,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
     implementation("org.jocl:jocl:2.0.4")
+    implementation("io.github.microutils:kotlin-logging-jvm:2.0.11")
+    implementation("org.nield:kotlin-statistics:1.2.1")
+    implementation("org.apache.commons:commons-math3:3.6.1")
 }
 
 kotlin {
