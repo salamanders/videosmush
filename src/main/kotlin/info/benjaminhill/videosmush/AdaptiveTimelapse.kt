@@ -14,7 +14,7 @@ import kotlin.time.measureTime
 private val LOG = KotlinLogging.logger {}
 
 private const val OUTPUT_SECONDS = 30.0
-private const val OUTPUT_FPS = 30.0
+private const val OUTPUT_FPS = 60.0
 private const val OUTPUT_FRAMES = OUTPUT_SECONDS * OUTPUT_FPS
 
 fun main() {
@@ -79,7 +79,8 @@ fun advancedAdaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     }
 
     LOG.info { "Writing frames to file." }
-    val imagesFull = fileInput.toPath().toFrames(isThumbnail = false, rotFilter = null).map { it.frame.toDecodedImage() }
+    val imagesFull =
+        fileInput.toPath().toFrames(isThumbnail = false, rotFilter = null).map { it.frame.toDecodedImage() }
     imagesFull.buffer()
         .mergeFrames(sourceFrameCounts.toList()).buffer()
         .flowOn(Dispatchers.IO)

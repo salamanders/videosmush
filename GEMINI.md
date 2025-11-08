@@ -10,7 +10,6 @@ The project leverages several key libraries:
 
 - **Kotlin:** The primary programming language.
 - **JavaCV:** For video processing, including reading and writing video files.
-- **JOCL (Java OpenCL):** For GPU-accelerated image averaging, which is the core of the frame blending process.
 - **KotlinX Coroutines:** For managing asynchronous operations, particularly in the video processing pipeline.
 
 ## Building and Running
@@ -26,6 +25,8 @@ To build and the project, run the following command:
 ./gradlew run
 ```
 
+NOTE: Don't downgrade gradle. Don't edit ANY configuration files aside from `build.gradle.kts`.
+
 ### Running
 
 The application requires a `script.csv` file in the project root directory and 1 or more video files in the `inputs`
@@ -35,6 +36,6 @@ directory.
 
 - The project uses Kotlin with a functional and asynchronous style, heavily relying on Kotlin Flows.
 - The core logic for image averaging is implemented in the `AveragingImage` interface, with a GPU-accelerated
-  implementation in `AveragingImageGpu.kt`.
+  implementation in `AveragingImageGpu.kt`. (Not currently functional, uses AveragingImageRGB)
 - Video I/O is handled by the utility functions in `VideoFlowIO.kt`.
 - The main application logic is in `Main.kt`, which reads the script and orchestrates the video processing pipeline.
