@@ -34,10 +34,16 @@ suspend fun main() {
     println("Total input frames: ${allSources.sumOf { it.frames }}")
 
     // Scripts are "input frame number,target output frame number"
-    val script: Map<Int, Int> = Path.of("script.csv").readLines()
-        .filter { it.isNotBlank() && !it.startsWith("#") }
-        .map { it.split(",") }
-        .associate { (inputFrame, outputFrame) -> inputFrame.trim().toInt() to 60 * outputFrame.trim().toInt() }
+    val useCompressionSmusher = true // Set to false to use script.csv
+    val script: Map<Int, Int> = if (useCompressionSmusher) {
+        val smusher = CompressionBasedSmusher(allSources)
+        smusher.smush()
+    } else {
+        Path.of("script.csv").readLines()
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+            .map { it.split(",") }
+            .associate { (inputFrame, outputFrame) -> inputFrame.trim().toInt() to 60 * outputFrame.trim().toInt() }
+    }
 
     val implementations = mapOf(
         //"bidirect" to { w: Int, h: Int -> AveragingImageBIDirect.blankOf(w, h) },
