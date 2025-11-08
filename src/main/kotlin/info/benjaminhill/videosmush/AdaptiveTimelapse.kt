@@ -5,11 +5,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.bytedeco.javacv.Frame
-import org.nield.kotlinstatistics.standardDeviation
 import java.awt.image.BufferedImage
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.measureTime
 
@@ -21,12 +19,12 @@ private const val OUTPUT_FRAMES = OUTPUT_SECONDS * OUTPUT_FPS
 
 fun main() {
     val duration = measureTime {
-        adaptiveTimelapse()
+        advancedAdaptiveTimelapse()
     }
-    println("Adaptive timelapse took $duration")
+    println("Advanced adaptive timelapse took $duration")
 }
 
-fun adaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
+fun advancedAdaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     val inputDir = File("input")
     val outputDir = File("output")
     outputDir.mkdirs()
@@ -39,7 +37,7 @@ fun adaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     }
     val fileInput = inputFiles.first()
     val fileThumbs = File(outputDir, "thumbs.mkv")
-    val fileOutput = File(outputDir, "adaptive_timelapse.mkv")
+    val fileOutput = File(outputDir, "advanced_adaptive_timelapse.mkv")
 
     if (!fileThumbs.canRead()) {
         LOG.info { "Creating thumbnail file ${fileThumbs.name}" }
@@ -68,10 +66,11 @@ fun adaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     val diffs = images
         .zipWithNext { a, b -> a.toHue().averageDiff(b.toHue()) }
         .toList()
+        .toDoubleArray()
 
-
-    val betterFrameDiffs = manipulateFrameDiffs(diffs)
-    val sourceFrameCounts = frameDiffsToSourceFrameCounts(betterFrameDiffs)
+    val smoothedDiffs = savitzkyGolaySmooth(diffs)
+    val variabledDiffs = enhanceVariabilityAndApplyConstraints(smoothedDiffs, 2.0, 1, 100)
+    val sourceFrameCounts = frameDiffsToSourceFrameCounts(variabledDiffs.map { it.toDouble() }.toDoubleArray())
 
     LOG.info {
         "Output length: ${sourceFrameCounts.size / OUTPUT_FPS} sec, " +
@@ -82,45 +81,12 @@ fun adaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     LOG.info { "Writing frames to file." }
     val imagesFull = fileInput.toPath().toFrames(isThumbnail = false, rotFilter = null).map { it.frame.toDecodedImage() }
     imagesFull.buffer()
-        .mergeFrames(sourceFrameCounts).buffer()
+        .mergeFrames(sourceFrameCounts.toList()).buffer()
         .flowOn(Dispatchers.IO)
         .collectToFile(fileOutput, OUTPUT_FPS)
 }
 
-
-/** This is where we play with numbers to make everything look good! */
-private fun manipulateFrameDiffs(rawFrameDiffs: List<Double>): List<Double> {
-    // Smooth first, because more fun when speedup is sustained.
-    // Might be better to replace with min or max, or gaussian smoothing
-    val smoothed = rawFrameDiffs
-        .windowed(
-            size = (2 * OUTPUT_FPS * rawFrameDiffs.size / OUTPUT_FRAMES).toInt(),
-            partialWindows = true
-        ) {
-            // Smooth over approx 1 second of TARGET video
-            it.average()
-        }
-
-    // cap >2 standard deviations
-    val avg = smoothed.average()
-    val std = smoothed.standardDeviation()
-    val capped = smoothed.map { it.coerceIn(avg - (2 * std), avg + (2 * std)) }
-
-    // Normalize from 0..1 (last step!)
-    val minDiff = capped.minOrNull()!!
-    val maxDiff = capped.maxOrNull()!!
-
-    // Normalized
-    return capped.map {
-        (it - minDiff) / (maxDiff - minDiff)
-    }
-}
-
-/**
- * The underlying time-lapse: Sequentially merge frames until you exceed a diff threshold.
- * If instead it was "merge until X frames", would be a standard blurred together time-lapse.
- */
-private fun frameDiffsToSourceFrameCounts(frameDiffs: List<Double>): List<Int> {
+private fun frameDiffsToSourceFrameCounts(frameDiffs: DoubleArray): List<Int> {
     val avgDiffPerOutputFrame = frameDiffs.sum() / OUTPUT_FRAMES
     val numberFramesMergedIntoOne = mutableListOf<Int>()
     var pendingFrameCount = 0
@@ -140,44 +106,37 @@ private fun frameDiffsToSourceFrameCounts(frameDiffs: List<Double>): List<Int> {
     return numberFramesMergedIntoOne
 }
 
-private fun DecodedImage.toHue(): IntArray = IntArray(red.size) { index ->
-    getHue(red[index], green[index], blue[index])
+fun Frame.toDecodedImage(): DecodedImage {
+    val converter = org.bytedeco.javacv.Java2DFrameConverter()
+    val bufferedImage = converter.convert(this)
+    val red = IntArray(this.imageWidth * this.imageHeight)
+    val green = IntArray(this.imageWidth * this.imageHeight)
+    val blue = IntArray(this.imageWidth * this.imageHeight)
+    for (row in 0 until this.imageHeight) {
+        for (col in 0 until this.imageWidth) {
+            val index = row * this.imageWidth + col
+            val rgb = bufferedImage.getRGB(col, row)
+            red[index] = (rgb shr 16) and 0xFF
+            green[index] = (rgb shr 8) and 0xFF
+            blue[index] = rgb and 0xFF
+        }
+    }
+    return DecodedImage(this.imageWidth, this.imageHeight, red, green, blue)
 }
 
-private fun getHue(red: Int, green: Int, blue: Int): Int {
-    val min = min(min(red, green), blue)
-    val max = max(max(red, green), blue)
-    if (min == max) {
-        return 0
+fun DecodedImage.toFrameWithPixelFormat(): FrameWithPixelFormat {
+    val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    for (row in 0 until height) {
+        for (col in 0 until width) {
+            val index = row * width + col
+            val rgb = (red[index] shl 16) or (green[index] shl 8) or blue[index]
+            bufferedImage.setRGB(col, row, rgb)
+        }
     }
-    var hue = when (max) {
-        red -> (green - blue).toDouble() / (max - min)
-        green -> 2 + (blue - red).toDouble() / (max - min)
-        else -> 4 + (red - green).toDouble() / (max - min)
-    }
-    hue *= 60
-    if (hue < 0) hue += 360
-    return hue.toInt()
+    val converter = org.bytedeco.javacv.Java2DFrameConverter()
+    val frame = converter.convert(bufferedImage)
+    return FrameWithPixelFormat.ofFfmpeg(frame, -1)
 }
-
-fun IntArray.averageDiff(b: IntArray): Double {
-    var sum = 0.0
-    for (i in this.indices) {
-        sum += min(
-            abs(this[i] - b[i]).toDouble(),
-            360 - abs(this[i] - b[i]).toDouble()
-        )
-    }
-    return sum / this.size
-}
-
-data class DecodedImage(
-    val width: Int,
-    val height: Int,
-    val red: IntArray,
-    val green: IntArray,
-    val blue: IntArray,
-)
 
 fun <T> Flow<T>.zipWithNext(transform: (a: T, b: T) -> Double): Flow<Double> = flow {
     var prev: T? = null
@@ -216,49 +175,13 @@ fun Flow<DecodedImage>.mergeFrames(sourceFrameCounts: List<Int>): Flow<BufferedI
     }
 }
 
-fun <T> List<T>.windowed(size: Int, partialWindows: Boolean, transform: (List<T>) -> Double): List<Double> {
-    val result = mutableListOf<Double>()
-    for (i in 0 until this.size) {
-        val window = this.subList(max(0, i - size / 2), min(this.size, i + size / 2))
-        if (!partialWindows && window.size < size) {
-            continue
-        }
-        result.add(transform(window))
+fun IntArray.averageDiff(b: IntArray): Double {
+    var sum = 0.0
+    for (i in this.indices) {
+        sum += min(
+            abs(this[i] - b[i]).toDouble(),
+            360 - abs(this[i] - b[i]).toDouble()
+        )
     }
-    return result
-}
-
-/**
- * This function can be found in `scratch.txt`
- */
-fun Frame.toDecodedImage(): DecodedImage {
-    val converter = org.bytedeco.javacv.Java2DFrameConverter()
-    val bufferedImage = converter.convert(this)
-    val red = IntArray(this.imageWidth * this.imageHeight)
-    val green = IntArray(this.imageWidth * this.imageHeight)
-    val blue = IntArray(this.imageWidth * this.imageHeight)
-    for (row in 0 until this.imageHeight) {
-        for (col in 0 until this.imageWidth) {
-            val index = row * this.imageWidth + col
-            val rgb = bufferedImage.getRGB(col, row)
-            red[index] = (rgb shr 16) and 0xFF
-            green[index] = (rgb shr 8) and 0xFF
-            blue[index] = rgb and 0xFF
-        }
-    }
-    return DecodedImage(this.imageWidth, this.imageHeight, red, green, blue)
-}
-
-fun DecodedImage.toFrameWithPixelFormat(): FrameWithPixelFormat {
-    val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-    for (row in 0 until height) {
-        for (col in 0 until width) {
-            val index = row * width + col
-            val rgb = (red[index] shl 16) or (green[index] shl 8) or blue[index]
-            bufferedImage.setRGB(col, row, rgb)
-        }
-    }
-    val converter = org.bytedeco.javacv.Java2DFrameConverter()
-    val frame = converter.convert(bufferedImage)
-    return FrameWithPixelFormat.ofFfmpeg(frame, -1)
+    return sum / this.size
 }
