@@ -15,6 +15,18 @@ import kotlin.math.ceil
 import kotlin.time.measureTime
 
 
+/**
+ * The main entry point for the VideoSmush application.
+ *
+ * **High-level flow:**
+ * 1. **Discovery:** Scans the `input/` directory for video files.
+ * 2. **Analysis/Scripting:**
+ *    - EITHER calculates a new "smush script" (schedule) based on video content (compression or pixel diff).
+ *    - OR reads an existing `script.csv` if manual control is preferred.
+ * 3. **Execution:** Runs the "smush" process using the chosen `AveragingImage` implementation (currently RGB).
+ *
+ * This structure allows us to decouple the "what to do" (the script) from the "how to do it" (the smush function).
+ */
 suspend fun main() {
     avutil.av_log_set_level(avutil.AV_LOG_QUIET)
 
@@ -67,6 +79,19 @@ suspend fun main() {
     }
 }
 
+/**
+ * The core engine that executes a "Smush".
+ *
+ * **How it works:**
+ * It sets up a pipeline using Kotlin Flows:
+ * 1. `allSources` -> converted to a single continuous stream of frames.
+ * 2. Frames are fed into an [AveragingImage] accumulator.
+ * 3. The `script` determines the dynamic ratio (input frames per output frame).
+ * 4. When the accumulator is full (based on current ratio), it emits a finished frame.
+ * 5. Resulting frames are encoded to video.
+ *
+ * @param averagingImageFactory Helper to create fresh accumulator instances (strategy pattern).
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 suspend fun smush(
     allSources: List<Source>,

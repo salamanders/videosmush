@@ -6,6 +6,15 @@ import org.apache.commons.math3.fitting.WeightedObservedPoints
 import kotlin.math.min
 import kotlin.math.pow
 
+/**
+ * Applies a Savitzky-Golay filter to smooth data.
+ *
+ * This smoothing technique fits a polynomial to a window of data points to reduce noise
+ * while preserving the shape of peaks better than a simple moving average.
+ *
+ * Essential for "jittery" data like frame-by-frame pixel differences where we want to find
+ * the underlying "action" trend without reacting to every single micro-movement.
+ */
 fun savitzkyGolaySmooth(data: DoubleArray): DoubleArray {
     // Tune windowSize and polynomialDegree for more or less smoothing.
     val windowSize = 5
@@ -14,6 +23,17 @@ fun savitzkyGolaySmooth(data: DoubleArray): DoubleArray {
     return sgFilter.smooth(data)
 }
 
+/**
+ * Transforms raw difference data into specific frame-merge counts (speedup factors).
+ *
+ * This function handles the "artistic" part of the adaptive timelapse:
+ * 1. Normalizes input data to 0..1
+ * 2. Applies a power curve (`variabilityFactor`) to make quiet parts quieter and loud parts louder.
+ * 3. Scales the result to the desired speed range (`minMerge` to `maxMerge`).
+ *
+ * The output is an array where each integer represents how many input frames should be merged
+ * into a single output frame at that point in time.
+ */
 fun enhanceVariabilityAndApplyConstraints(
     data: DoubleArray,
     // Higher factor = more dramatic speed changes.
@@ -30,6 +50,13 @@ fun enhanceVariabilityAndApplyConstraints(
 }
 
 
+/**
+ * Implementation of the Savitzky-Golay smoothing filter.
+ *
+ * Unlike standard averaging, this uses polynomial regression (Least Squares) on a moving window.
+ * This class encapsulates the math complexity (Apache Commons Math) required to fit the curve
+ * and predict the smoothed center value.
+ */
 class SavitzkyGolayFilter(
     private val windowSize: Int,
     private val polynomialDegree: Int
@@ -63,18 +90,27 @@ class SavitzkyGolayFilter(
     }
 }
 
+/** Rescales the array so the smallest value is 0.0 and the largest is 1.0. */
 fun DoubleArray.normalize(): DoubleArray {
     val min = this.minOrNull() ?: 0.0
     val max = this.maxOrNull() ?: 1.0
     return this.map { (it - min) / (max - min) }.toDoubleArray()
 }
 
+/** Linearly scales the values in the array to fit within the [min, max] range. */
 fun DoubleArray.scale(min: Double, max: Double): DoubleArray {
     val dataMin = this.minOrNull() ?: 0.0
     val dataMax = this.maxOrNull() ?: 1.0
     return this.map { min + (it - dataMin) * (max - min) / (dataMax - dataMin) }.toDoubleArray()
 }
 
+/**
+ * A raw, memory-resident representation of an image separated into color channels.
+ *
+ * This exists solely for pixel-level analysis (like hue calculation) where we need fast
+ * access to raw integer values without the overhead or complexity of a full `BufferedImage`
+ * or JavaCV `Frame`.
+ */
 data class DecodedImage(
     val width: Int,
     val height: Int,
@@ -83,6 +119,13 @@ data class DecodedImage(
     val blue: IntArray,
 )
 
+/**
+ * Converts the RGB image to a Hue map.
+ *
+ * We use Hue for "difference" calculations because it is robust against lighting changes.
+ * A shadow passing over a scene changes Brightness but not Hue, so Hue-based difference
+ * allows us to ignore "boring" lighting shifts and focus on "interesting" object movement.
+ */
 fun DecodedImage.toHue(): IntArray = IntArray(red.size) { index ->
     getHue(red[index], green[index], blue[index])
 }

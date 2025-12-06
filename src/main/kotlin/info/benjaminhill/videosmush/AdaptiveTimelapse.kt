@@ -24,6 +24,18 @@ fun main() {
     println("Advanced adaptive timelapse took $duration")
 }
 
+/**
+ * Orchestrates a multi-pass adaptive timelapse generation.
+ *
+ * This function implements a sophisticated pipeline:
+ * 1. **Thumbnail Generation**: Creates a small, low-res version of the input to speed up analysis.
+ * 2. **Analysis**: Calculates frame-by-frame visual differences (using Hue) on the thumbnails.
+ * 3. **Planning**: Smoothes the difference data and converts it into a "merge plan" (how many input frames -> 1 output frame).
+ * 4. **Execution**: Reads the full-resolution input again and averages frames according to the plan.
+ *
+ * This separation of analysis (on thumbnails) and execution (on full frames) allows for complex
+ * look-ahead algorithms that would be too slow if run on the full raw video stream in one pass.
+ */
 fun advancedAdaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
     val inputDir = File("input")
     val outputDir = File("output")
@@ -87,6 +99,15 @@ fun advancedAdaptiveTimelapse(): Unit = runBlocking(Dispatchers.Default) {
         .collectToFile(fileOutput, OUTPUT_FPS)
 }
 
+/**
+ * Converts a stream of "frame importance" scores into a concrete schedule of frame merges.
+ *
+ * It uses an accumulator bucket strategy: we keep accumulating "importance" until we reach
+ * the threshold required to produce *one* output frame (`avgDiffPerOutputFrame`).
+ *
+ * This ensures the total "visual change" per output frame is roughly constant, causing the video
+ * to speed up during boring parts and slow down during action.
+ */
 private fun frameDiffsToSourceFrameCounts(frameDiffs: DoubleArray): List<Int> {
     val avgDiffPerOutputFrame = frameDiffs.sum() / OUTPUT_FRAMES
     val numberFramesMergedIntoOne = mutableListOf<Int>()
@@ -107,6 +128,11 @@ private fun frameDiffsToSourceFrameCounts(frameDiffs: DoubleArray): List<Int> {
     return numberFramesMergedIntoOne
 }
 
+/**
+ * Helper to get raw pixel data out of a JavaCV Frame.
+ * Used during the analysis phase to convert obscure FFmpeg/JavaCV objects into
+ * simple integer arrays that are easy to do math on.
+ */
 fun Frame.toDecodedImage(): DecodedImage {
     val converter = org.bytedeco.javacv.Java2DFrameConverter()
     val bufferedImage = converter.convert(this)
@@ -125,6 +151,11 @@ fun Frame.toDecodedImage(): DecodedImage {
     return DecodedImage(this.imageWidth, this.imageHeight, red, green, blue)
 }
 
+/**
+ * Inverse operation of `toDecodedImage`.
+ * Reconstructs a JavaCV-compatible frame from our raw pixel data so it can be passed
+ * back into the standard `AveragingImage` pipeline.
+ */
 fun DecodedImage.toFrameWithPixelFormat(): FrameWithPixelFormat {
     val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
     for (row in 0 until height) {
@@ -139,6 +170,10 @@ fun DecodedImage.toFrameWithPixelFormat(): FrameWithPixelFormat {
     return FrameWithPixelFormat.ofFfmpeg(frame, -1)
 }
 
+/**
+ * Flow operator that pairs each element with the subsequent one.
+ * Essential for calculating "diffs" between consecutive frames (t and t+1).
+ */
 fun <T> Flow<T>.zipWithNext(transform: (a: T, b: T) -> Double): Flow<Double> = flow {
     var prev: T? = null
     collect {
@@ -149,6 +184,14 @@ fun <T> Flow<T>.zipWithNext(transform: (a: T, b: T) -> Double): Flow<Double> = f
     }
 }
 
+/**
+ * The core execution engine for the adaptive timelapse.
+ *
+ * It consumes the stream of input frames and aggregates them into averaged frames
+ * based on the provided `sourceFrameCounts` schedule.
+ *
+ * @param sourceFrameCounts A list where index `i` is the number of input frames to merge for output frame `i`.
+ */
 fun Flow<DecodedImage>.mergeFrames(sourceFrameCounts: List<Int>): Flow<BufferedImage> = flow {
     val sourceFrameCountsIterator = sourceFrameCounts.iterator()
     var frameCountToMerge = sourceFrameCountsIterator.next()
@@ -176,6 +219,10 @@ fun Flow<DecodedImage>.mergeFrames(sourceFrameCounts: List<Int>): Flow<BufferedI
     }
 }
 
+/**
+ * Calculates the average pixel-by-pixel difference between two hue arrays.
+ * Handles the wrap-around nature of hue (e.g. difference between 359 and 1 is 2, not 358).
+ */
 fun IntArray.averageDiff(b: IntArray): Double {
     var sum = 0.0
     for (i in this.indices) {

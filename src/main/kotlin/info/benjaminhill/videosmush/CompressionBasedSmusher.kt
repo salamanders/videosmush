@@ -12,7 +12,17 @@ import kotlin.io.path.deleteIfExists
 import kotlin.io.path.fileSize
 
 /**
- * Generates a script for video smushing based on video compression analysis.
+ * An alternative strategy for determining "visual interest" in a video.
+ *
+ * **Why this class exists:**
+ * Pixel-by-pixel difference analysis (as done in [AdaptiveTimelapse.kt]) is computationally expensive
+ * and sensitive to noise (wind blowing leaves).
+ *
+ * This class uses **video compression size** as a proxy for entropy/action.
+ * - High action/movement -> hard to compress -> large file size.
+ * - Low action/static scene -> easy to compress -> small file size.
+ *
+ * This method is often faster and more robust to global lighting changes than raw pixel diffs.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CompressionBasedSmusher(private val sources: List<Source>) {
@@ -98,6 +108,7 @@ class CompressionBasedSmusher(private val sources: List<Source>) {
 
 /**
  * Chunks a Flow into a Flow of lists of a given size.
+ * Useful for batch processing (like encoding 24 frames at a time) where a single frame isn't enough context.
  */
 fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> = flow {
     val buffer = mutableListOf<T>()

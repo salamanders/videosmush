@@ -13,7 +13,16 @@ import java.util.concurrent.atomic.AtomicLong
 
 private const val FILTER_THUMB = "scale=128:-1"
 
-/** Need to get fancy with the thread local objects to keep from crashing (I think.) */
+/**
+ * Consumes a Flow of images and encodes them into a video file.
+ *
+ * **Role:** The "Sink" of our processing pipeline.
+ *
+ * It abstracts away the complexity of FFmpeg video encoding (codecs, pixel formats, threading)
+ * so the main logic can just yield `BufferedImage`s without worrying about how they get saved.
+ *
+ * Currently configured for high-quality, modern AV1 (libaom-av1) encoding in MKV.
+ */
 suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double = 60.0) {
     var ffr: FFmpegFrameRecorder? = null
     var maxFrameNumber = 0
@@ -52,7 +61,17 @@ suspend fun Flow<BufferedImage>.collectToFile(destinationFile: File, fps: Double
     }
 }
 
-/** Compact way of generating a flow of images */
+/**
+ * Produces a Flow of frames from a video file.
+ *
+ * **Role:** The "Source" of our processing pipeline.
+ *
+ * It wraps the imperative, stateful `FFmpegFrameGrabber` into a reactive Kotlin Flow.
+ * It also handles:
+ * - Resource management (closing grabbers)
+ * - Optional resizing/filtering (e.g. for creating thumbnails)
+ * - Pixel format metadata propagation
+ */
 fun Path.toFrames(
     isThumbnail: Boolean,
     rotFilter: String?,

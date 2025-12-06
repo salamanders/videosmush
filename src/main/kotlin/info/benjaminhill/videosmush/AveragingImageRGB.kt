@@ -8,9 +8,16 @@ import java.awt.image.DataBufferByte
 import java.awt.image.DataBufferInt
 
 /**
- * Image fully parsed out to a full int per each pixel per each channel.
- * NOT memory efficient, but avoids overflows.
- * Makes use of Java 21 virtual threads.
+ * A CPU-based implementation of [AveragingImage] that keeps full integer precision per channel.
+ *
+ * **Why this class exists:**
+ * Standard `BufferedImage` backends often cap pixel values at 255 (byte), which leads to overflow
+ * when summing thousands of frames. This class uses `IntArray` to store the running sum,
+ * preventing overflow at the cost of significantly higher memory usage (4x per channel).
+ *
+ * **Trade-offs:**
+ * - Pros: thread-safe accumulation (via coroutines), no overflow, simple to debug.
+ * - Cons: High memory footprint. Not suitable for extremely high-res video on low-RAM machines.
  */
 class AveragingImageRGB
 private constructor(
