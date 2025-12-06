@@ -3,7 +3,13 @@ package info.benjaminhill.videosmush
 import java.awt.image.BufferedImage
 
 /**
- * Various techniques for averaging together a **lot** of frames without binning
+ * Abstraction for the core "smushing" operation: averaging many frames into one.
+ *
+ * We defined this interface to decouple the *logic* of averaging (accumulate pixels -> divide)
+ * from the *implementation details* (CPU vs GPU vs OpenCV).
+ *
+ * This allows us to swap in a GPU-accelerated backend or a memory-optimized one
+ * without touching the main application loop.
  */
 interface AveragingImage {
     val width: Int
