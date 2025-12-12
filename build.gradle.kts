@@ -25,6 +25,10 @@ dependencies {
     implementation("io.github.microutils:kotlin-logging-jvm:2.0.11")
     implementation("org.nield:kotlin-statistics:1.2.1")
     implementation("org.apache.commons:commons-math3:3.6.1")
+
+    testImplementation(kotlin("test"))
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
 }
 
 kotlin {
@@ -33,4 +37,8 @@ kotlin {
 
 application {
     mainClass.set("info.benjaminhill.videosmush.MainKt")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

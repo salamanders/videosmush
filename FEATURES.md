@@ -416,11 +416,4 @@ fun BufferedImage.deepCopy(): BufferedImage {
 }
 
 
-/**
- * Crashes, maybe a bug in this filter, maybe a bug in the implementation
- */
-/*
-fun filterCrop(fromLeft:Int=0, fromRight:Int=0, fromTop:Int=0, fromBottom:Int=0)=
-        "crop=in_w-${fromLeft+fromRight}:in_h-${fromTop+fromBottom}:${fromLeft}:${fromTop}"
-*/
 ```
