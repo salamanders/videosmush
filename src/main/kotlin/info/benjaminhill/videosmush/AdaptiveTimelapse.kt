@@ -3,7 +3,7 @@ package info.benjaminhill.videosmush
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.bytedeco.javacv.Frame
 import java.awt.image.BufferedImage
 import java.io.File
