@@ -224,12 +224,12 @@ fun Flow<DecodedImage>.mergeFrames(sourceFrameCounts: List<Int>): Flow<BufferedI
  * Handles the wrap-around nature of hue (e.g. difference between 359 and 1 is 2, not 358).
  */
 fun IntArray.averageDiff(b: IntArray): Double {
+    require(this.size == b.size) { "Arrays must be same size" }
     var sum = 0.0
-    for (i in this.indices) {
-        sum += min(
-            abs(this[i] - b[i]).toDouble(),
-            360 - abs(this[i] - b[i]).toDouble()
-        )
+    val size = this.size
+    for (i in 0 until size) {
+        val diff = abs(this[i] - b[i])
+        sum += if (diff > 180) 360 - diff else diff
     }
-    return sum / this.size
+    return sum / size
 }
