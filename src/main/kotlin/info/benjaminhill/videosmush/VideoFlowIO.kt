@@ -135,7 +135,3 @@ fun Path.toFrames(
         println("Finished reading from: $sourceFile, ${numFrames.get()} frames.")
     }
 }
-
-@Suppress("unused")
-@OptIn(ExperimentalCoroutinesApi::class)
-fun <T> concatenate(vararg flows: Flow<T>) = flows.asFlow().flattenConcat()

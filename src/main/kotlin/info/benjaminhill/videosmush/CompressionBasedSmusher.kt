@@ -4,7 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flattenConcat
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.chunked
 import org.bytedeco.javacv.FFmpegFrameRecorder
 import java.nio.file.Path
 import kotlin.io.path.createTempFile
@@ -36,9 +36,7 @@ class CompressionBasedSmusher(private val sources: List<Source>) {
         val actionScores = mutableListOf<Double>()
         val frameFlow = sources.map {
             it.path.toFrames(isThumbnail = true, rotFilter = null)
-        }.reduce { acc, flow ->
-            arrayOf(acc, flow).asFlow().flattenConcat()
-        }
+        }.asFlow().flattenConcat()
 
         var width = 0
         var height = 0
@@ -103,23 +101,5 @@ class CompressionBasedSmusher(private val sources: List<Source>) {
 
     private companion object {
         private const val CHUNK_SIZE = 24
-    }
-}
-
-/**
- * Chunks a Flow into a Flow of lists of a given size.
- * Useful for batch processing (like encoding 24 frames at a time) where a single frame isn't enough context.
- */
-fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> = flow {
-    val buffer = mutableListOf<T>()
-    collect {
-        buffer.add(it)
-        if (buffer.size == size) {
-            emit(buffer.toList())
-            buffer.clear()
-        }
-    }
-    if (buffer.isNotEmpty()) {
-        emit(buffer.toList())
     }
 }

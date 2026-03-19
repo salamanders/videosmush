@@ -126,9 +126,9 @@ suspend fun smush(
                 rotFilter = "transpose=1",
             )
         }
-            .reduce { acc, flow ->
-                arrayOf(acc, flow).asFlow().flattenConcat()
-            }.transform { frameWithPixelFormat ->
+            .asFlow()
+            .flattenConcat()
+            .transform { frameWithPixelFormat ->
                 val frame = frameWithPixelFormat.frame
                 val localAveragingImage: AveragingImage =
                     averagingImage ?: averagingImageFactory(frame.imageWidth, frame.imageHeight).also {
