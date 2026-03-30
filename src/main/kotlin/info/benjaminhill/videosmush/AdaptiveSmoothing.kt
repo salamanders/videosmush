@@ -70,17 +70,19 @@ class SavitzkyGolayFilter(
         val halfWindow = windowSize / 2
         val smoothedData = DoubleArray(n)
 
+        val fitter = PolynomialCurveFitter.create(polynomialDegree)
+        val obs = WeightedObservedPoints()
+
         for (i in 0 until n) {
             val start = (i - halfWindow).coerceAtLeast(0)
             val end = (i + halfWindow).coerceAtMost(n - 1)
             val window = data.slice(start..end)
 
-            val obs = WeightedObservedPoints()
+            obs.clear()
             for ((j, value) in window.withIndex()) {
                 obs.add((start + j).toDouble(), value)
             }
 
-            val fitter = PolynomialCurveFitter.create(polynomialDegree)
             val coeff = fitter.fit(obs.toList())
             val polynomial = PolynomialFunction(coeff)
 
